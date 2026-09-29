@@ -214,7 +214,8 @@ def _core(f, s11, s21, s12, s22, L, geom, method, branch_method, opts):
         eps, mu = r.eps_mu_only, np.ones_like(r.eps)
     elif method == "baker_jarvis":
         it = solve_eps_only(f, s11, s21, L, geom, r.eps_mu_only, s12=s12, s22=s22,
-                            l_air_minus_l=opts["l_air_minus_l"], weight=opts["bj_weight"])
+                            l_air_minus_l=opts["l_air_minus_l"], formulation=opts["bj_formulation"],
+                            beta=opts["bj_beta"])
         eps, mu = it.eps, it.mu
         conv = {"converged": it.converged, "n_iterations": it.n_iterations, "residual_rms": it.residual_rms,
                 "jacobian_cond": it.jacobian_cond}
@@ -237,7 +238,7 @@ def _core(f, s11, s21, s12, s22, L, geom, method, branch_method, opts):
 def extract_material_parameters(frequency, s11, s21, thickness, s12=None, s22=None, geometry="coax",
                                 method="auto", branch_method="anchored", reference_plane_offsets=(0.0, 0.0),
                                 holder_length=None, assume_nonmagnetic=False, noise_sigma=1e-3,
-                                noise_floor=None, average_ports=True, multistart=True, bj_weight=None,
+                                noise_floor=None, average_ports=True, multistart=True, bj_formulation="eq2.24+2.25", bj_beta=0.0,
                                 regularization=1e-2, prior_eps_mu=None, uncertainty=None, kk=True,
                                 kk_threshold=3.0, singular_rel_threshold=0.1) -> ExtractionResult:
     """Extract complex eps_r and mu_r from two-port T/R S-parameters.
@@ -258,6 +259,9 @@ def extract_material_parameters(frequency, s11, s21, thickness, s12=None, s22=No
         identifiability bound and as the data scale of the regularised solver.
     noise_floor : |S| below which a parameter is considered noise-dominated
         (default 3 * noise_sigma).
+    bj_formulation, bj_beta : NIST TN 1341 formulation for method "baker_jarvis" ("eq2.24+2.25"
+        default: reference-plane invariant; "eq2.25", "eq2.38" with weight beta, "direct").
+        The default was chosen from results/studies/bj_formulation.csv (docs/benchmark_report.md).
     uncertainty : None, True (default spec) or nrw.uncertainty.UncertaintySpec.
     """
     geom = geometry_from_dict({"kind": geometry} if isinstance(geometry, str) else geometry)
@@ -294,7 +298,7 @@ def extract_material_parameters(frequency, s11, s21, thickness, s12=None, s22=No
         warn.append(f"method '{method}' assumes mu_r = 1 (non-magnetic sample); mu is not extracted")
 
     opts = dict(noise_floor=noise_floor, noise_sigma=noise_sigma, average_ports=average_ports,
-                multistart=multistart, bj_weight=bj_weight, regularization=regularization,
+                multistart=multistart, bj_formulation=bj_formulation, bj_beta=bj_beta, regularization=regularization,
                 prior_eps_mu=prior_eps_mu, l_air_minus_l=l_air_minus_l)
     core = _core(f, s11, s21, s12, s22, L, geom, method, branch_method, opts)
     eps, mu, base, br = core["eps"], core["mu"], core["nrw"], core["branch"]
@@ -423,6 +427,8 @@ def extract_material_parameters(frequency, s11, s21, thickness, s12=None, s22=No
                   "reference_plane_offsets_m": [d1, d2], "holder_length_m": holder_length,
                   "noise_sigma": noise_sigma, "noise_floor": noise_floor, "average_ports": average_ports,
                   "regularization": regularization if method == "regularized_eps_mu" else None,
+                  "bj_formulation": bj_formulation if method == "baker_jarvis" else None,
+                  "bj_beta": bj_beta if method == "baker_jarvis" else None,
                   "conventions": "exp(+jwt); eps = eps' - j eps''; passive => eps'', mu'' >= 0"},
         nrw_baseline=base,
     )

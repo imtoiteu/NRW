@@ -37,9 +37,13 @@ def test_eps_only_invariant_reference_plane(coax, band):
     s = make(band, eps, 1, L, coax)
     # planes displaced by unknown individual amounts but known total air length
     s = shift_reference_planes(band, *s, coax, 3e-3, 1e-3)
-    r = solve_eps_only(band, s[0], s[1], L, coax, 3.8, s12=s[2], s22=s[3], l_air_minus_l=4e-3)
+    r = solve_eps_only(band, s[0], s[1], L, coax, 3.8, s12=s[2], s22=s[3], l_air_minus_l=4e-3,
+                       formulation="eq2.24+2.25")
     assert r.converged.all()
     assert np.allclose(r.eps, eps, rtol=1e-7)
+    for form, kw in (("eq2.25", {"l_air_minus_l": 4e-3}), ("eq2.38", {"d1": 2e-3, "d2": 2e-3})):
+        r = solve_eps_only(band, s[0], s[1], L, coax, 3.8, s12=s[2], s22=s[3], formulation=form, **kw)
+        assert np.allclose(r.eps, eps, rtol=1e-7), form  # eq2.38 with beta=0 needs only d1 + d2
 
 
 def test_eps_only_stable_at_half_wavelength(coax):

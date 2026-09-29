@@ -97,11 +97,24 @@ def measured_group_delay(f, T):
 
 
 def _unreliable(f, T, noise_floor, step_limit):
+    """Indices k where unwrapping the step k-1 -> k is not trustworthy.
+
+    Three causes: (i) the wrapped phase step is itself large (|dpsi| > step_limit);
+    (ii) |T| at the noise floor (phase undefined); (iii) the step expected from the
+    band-median group delay, 2 pi tau df, exceeds step_limit (frequency gaps or coarse
+    grids: a small *wrapped* step can then hide one or more 2 pi wraps).
+    """
+    f = np.asarray(f, float)
     psi = principal_phase(T)
     d = np.abs(np.angle(np.exp(1j * np.diff(psi))))  # wrapped step magnitude in [0, pi]
     bad = np.flatnonzero(d > step_limit) + 1
     low = np.flatnonzero(np.abs(T) < noise_floor)
-    return np.unique(np.concatenate([bad, low, low + 1]).clip(0, len(T) - 1)).astype(int)
+    df = np.diff(f)
+    tau = np.abs(np.diff(np.unwrap(psi))) / (2 * np.pi * df)  # local |group delay| estimates
+    ok = np.isfinite(tau) & (np.abs(T[1:]) >= noise_floor) & (np.abs(T[:-1]) >= noise_floor)
+    tau_med = np.median(tau[ok]) if ok.any() else 0.0
+    gap = np.flatnonzero(2 * np.pi * tau_med * df > step_limit) + 1
+    return np.unique(np.concatenate([bad, low, low + 1, gap]).clip(0, len(T) - 1)).astype(int)
 
 
 def principal(f, T, length_m, geom, **_):

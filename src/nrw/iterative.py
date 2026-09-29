@@ -182,42 +182,72 @@ def solve_eps_mu_pointwise(f, s11, s21, length_m, geom: Geometry, eps0, mu0, s12
 
 
 # ---------------------------------------------------------------------------------------
-# Permittivity-only (mu = 1) iterative solution, Baker-Jarvis et al. (1990)-type
+# Permittivity-only (mu = 1) iterative solution: NIST TN 1341 / Baker-Jarvis et al. (1990)
 # ---------------------------------------------------------------------------------------
 def solve_eps_only(f, s11, s21, length_m, geom: Geometry, eps0, s12=None, s22=None, l_air_minus_l=None,
-                   d1=0.0, d2=0.0, weight=None, formulation="invariant", max_iter=100):
-    """Iterative permittivity-only (mu_r = 1) solution.
+                   d1=0.0, d2=0.0, beta=0.0, formulation="eq2.38", max_iter=100, weight=None):
+    """NIST (Baker-Jarvis et al. 1990; NIST TN 1341) permittivity-only iterative solution, mu_r = 1.
 
-    formulation="invariant" (Baker-Jarvis et al. 1990 type): residuals on the
-        reference-plane-invariant combinations
-            F1 = S21 S12 - S11 S22 - R^2 (T^2 - Gamma^2)/(1 - Gamma^2 T^2)
-            F2 = (S21 + S12)/2 - R T (1 - Gamma^2)/(1 - Gamma^2 T^2)
-        with R = exp(-gamma0 (L_air - L)); stacked as [weight * F1, F2] and solved in
-        the least-squares sense. Requires only the total air length L_air - L, not the
-        individual reference-plane positions. If S12/S22 are not supplied they are
-        taken equal to S21/S11 (reciprocal sample, symmetric planes).
-        ``weight`` defaults to 1 (see docs/final_method.md for the choice).
-    formulation="direct": residuals on S11, S21, S12, S22 with known d1, d2.
+    Formulations (equation numbers of NIST TN 1341 [R4]; TN 1536 [R7] eqs. 97-98):
 
-    With mu = 1 there are 2 real unknowns and S21 alone determines eps, so the problem
-    stays well conditioned when S11 -> 0 at half-wavelength points (see
-    nrw.conditioning); this is why the method does not diverge there - for
-    non-magnetic samples only.
+    "eq2.38" (default) - weighted transmission/reflection equation at the sample faces
+        (known plane offsets d1, d2 are de-embedded first):
+            1/2 {(S12 + S21) + beta (S11 + S22)} = [T(1 - G^2) + beta G (1 - T^2)] / (1 - T^2 G^2)
+        beta = uncertainty(S21) / uncertainty(S11); TN 1341 recommends beta = 0 for low-loss
+        samples (strong S21) and a large beta for high-loss samples.
+    "eq2.25" - reference-plane-invariant determinant equation
+            S11 S22 - S21 S12 = exp(-2 gamma0 (L_air - L)) (G^2 - T^2) / (1 - T^2 G^2),
+        which needs only L_air - L (``l_air_minus_l``), not the individual plane positions.
+    "eq2.24+2.25" - eq. (2.25) stacked with the invariant transmission equation (2.24),
+            (S21 + S12)/2 = exp(-gamma0 (L_air - L)) T (1 - G^2) / (1 - T^2 G^2),
+        solved in the least-squares sense (4 real equations, 2 unknowns).
+    "direct" - least squares on S11, S21, S12, S22 with known d1, d2 (not a NIST form; control).
+
+    Solver: vectorised Levenberg-Marquardt (complex_lm), i.e. damped Newton on the real and
+    imaginary parts, started from the supplied estimate (normally the NRW / Boughriet value with
+    a vetted branch). TN 1341 uses undamped Newton with frequency continuation; damping only
+    enlarges the basin of convergence and does not change the solution.
+
+    With mu = 1 the problem keeps full rank when S11 -> 0 at half-wavelength points (see
+    nrw.conditioning), which is why the method does not diverge there - for non-magnetic
+    samples only. Note: as with every T/R method, eps is defined only up to the phase branch;
+    the solver stays on the branch of its initial estimate.
     """
     f = np.asarray(f, float)
     s11 = np.asarray(s11, complex)
     s21 = np.asarray(s21, complex)
     s12c = s21 if s12 is None else np.asarray(s12, complex)
     s22c = s11 if s22 is None else np.asarray(s22, complex)
+    if weight is not None:  # backwards-compatible alias
+        beta = weight
     if l_air_minus_l is None:
         l_air_minus_l = d1 + d2
-    w = 1.0 if weight is None else weight
-    if formulation == "invariant":
-        y = np.stack([w * (s21 * s12c - s11 * s22c), (s21 + s12c) / 2], axis=1)
+    g0 = geom.gamma0(f)
+
+    def gt(x):
+        gam, t, _, _ = model.slab(f, geom, x[:, 0], 1.0, length_m)
+        return gam, t
+
+    if formulation == "eq2.38":
+        r1, r2 = np.exp(-g0 * d1), np.exp(-g0 * d2)
+        f11, f22, f21, f12 = s11 / r1**2, s22c / r2**2, s21 / (r1 * r2), s12c / (r1 * r2)
+        y = (0.5 * ((f12 + f21) + beta * (f11 + f22)))[:, None]
 
         def residual(x):
-            m1, m2 = model.invariants(f, geom, x[:, 0], 1.0, length_m, l_air_minus_l)
-            return np.stack([w * m1, m2], axis=1) - y
+            gam, t = gt(x)
+            return ((t * (1 - gam**2) + beta * gam * (1 - t**2)) / (1 - t**2 * gam**2))[:, None] - y
+    elif formulation in ("eq2.25", "eq2.24+2.25"):
+        R = np.exp(-g0 * l_air_minus_l)
+        det = (s11 * s22c - s21 * s12c)
+        trn = (s21 + s12c) / 2
+
+        def residual(x):
+            gam, t = gt(x)
+            den = 1 - t**2 * gam**2
+            r_det = R**2 * (gam**2 - t**2) / den - det
+            if formulation == "eq2.25":
+                return r_det[:, None]
+            return np.stack([r_det, R * t * (1 - gam**2) / den - trn], axis=1)
     elif formulation == "direct":
         y = np.stack([s11, s21, s12c, s22c], axis=1)
 
@@ -228,7 +258,8 @@ def solve_eps_only(f, s11, s21, length_m, geom: Geometry, eps0, s12=None, s22=No
     e0 = np.broadcast_to(np.asarray(eps0, complex), f.shape)
     x0 = np.where(np.isfinite(e0), e0, 1.0 + 0j)[:, None]
     x, cost, nit, conv, cond = complex_lm(residual, x0, max_iter=max_iter)
-    return _pack_result(f, x, cost, nit, conv, cond, y.shape[1], f"iterative_eps_only[{formulation}]",
+    nobs = residual(x).shape[1]
+    return _pack_result(f, x, cost, nit, conv, cond, nobs, f"nist_eps_only[{formulation}, beta={beta:g}]",
                         mu_fixed=True)
 
 
