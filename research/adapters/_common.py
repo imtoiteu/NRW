@@ -96,6 +96,38 @@ def stub_module(name: str, **attrs) -> types.ModuleType:
     return m
 
 
+class temporary_stubs:
+    """Context manager: stub the given module names only for the duration of an
+    import, then remove them again from sys.modules so that other libraries
+    (e.g. torch, which probes for IPython) are not affected."""
+
+    def __init__(self, *names):
+        self.names = names
+        self.added = []
+
+    def __enter__(self):
+        for n in self.names:
+            if n in sys.modules:
+                continue
+            try:
+                __import__(n)
+                continue
+            except Exception:
+                pass
+            stub_module(n)
+            self.added.append(n)
+        for n in self.added:  # wire children onto parents
+            parent, _, child = n.rpartition(".")
+            if parent in sys.modules:
+                setattr(sys.modules[parent], child, sys.modules[n])
+        return self
+
+    def __exit__(self, *exc):
+        for n in self.added:
+            sys.modules.pop(n, None)
+        return False
+
+
 # --------------------------------------------------------------------------
 # Octave bridge
 # --------------------------------------------------------------------------
@@ -122,9 +154,9 @@ def run_octave(code: str, inputs: dict, addpaths: list[Path], timeout: int = 300
             "warning('off','all');" + paths +
             f"load('{infile}'); outfile='{outfile}';\n" + code + "\n"
         )
-        (td / "run.m").write_text(script)
+        (td / "nrw_adapter_job.m").write_text(script)
         proc = subprocess.run(
-            ["octave-cli", "--no-gui", "--quiet", "--no-window-system", str(td / "run.m")],
+            ["octave-cli", "--no-gui", "--quiet", "--no-window-system", str(td / "nrw_adapter_job.m")],
             cwd=td, capture_output=True, text=True, timeout=timeout,
         )
         if proc.returncode != 0 or not outfile.exists():

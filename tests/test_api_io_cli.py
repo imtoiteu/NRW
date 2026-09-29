@@ -163,3 +163,30 @@ def test_result_save_with_plots(tmp_path, magnetic):
     r.save(tmp_path / "o")
     for name in ("results.csv", "summary.json", "parameters.png", "diagnostics.png", "kk_diagnostic.png"):
         assert (tmp_path / "o" / name).exists()
+
+
+def test_multi_thickness_api_resolves_half_wave(coax):
+    from nrw import extract_multi_thickness
+    f = np.linspace(2e9, 18e9, 201)
+    eps, mu = 4 - 0.004j, 1.5 - 0.003j
+    rng = np.random.default_rng(9)
+    meas = []
+    for L in (20e-3, 13e-3):
+        s = [complex_gaussian(x, 1e-3, rng) for x in make(f, eps, mu, L, coax)]
+        meas.append({"s11": s[0], "s21": s[1], "s12": s[2], "s22": s[3], "thickness": L})
+    single = extract_material_parameters(f, meas[0]["s11"], meas[0]["s21"], 20e-3, s12=meas[0]["s12"],
+                                         s22=meas[0]["s22"], kk=False)
+    both = extract_multi_thickness(f, meas, kk=False)
+    assert single.flags["singular_region"].sum() > both.flags["singular_region"].sum()
+    assert np.max(np.abs(both.epsilon_complex - eps)) < 0.3 * np.max(np.abs(single.epsilon_complex - eps))
+    assert np.nanmax(both.identifiability["eps_real_std"]) < np.nanmax(single.identifiability["eps_real_std"])
+    with pytest.raises(InputError):
+        extract_multi_thickness(f, meas[:1])
+
+
+def test_branch_disagreement_flag_on_aliased_grid(coax):
+    f = np.linspace(2e9, 18e9, 17)
+    s = make(f, 10 - 0.1j, 1, 60e-3, coax)
+    r = extract_material_parameters(f, s[0], s[1], 60e-3, s12=s[2], s22=s[3], method="nrw_eps", kk=False)
+    assert r.flags["branch_disagreement"].any()
+    assert any("disagree" in w for w in r.warnings)

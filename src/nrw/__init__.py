@@ -6,7 +6,7 @@ Conventions: exp(+jwt) time dependence, eps_r = eps' - j eps'', mu_r = mu' - j m
 """
 __version__ = "0.1.0"
 
-from .api import ExtractionResult, extract_material_parameters  # noqa: E402
+from .api import ExtractionResult, extract_material_parameters, extract_multi_thickness  # noqa: E402
 from .geometry import Coax, RectangularWaveguide  # noqa: E402
 
-__all__ = ["extract_material_parameters", "ExtractionResult", "Coax", "RectangularWaveguide", "__version__"]
+__all__ = ["extract_material_parameters", "extract_multi_thickness", "ExtractionResult", "Coax", "RectangularWaveguide", "__version__"]

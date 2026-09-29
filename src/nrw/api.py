@@ -207,6 +207,9 @@ def _core(f, s11, s21, s12, s22, L, geom, method, branch_method, opts):
     br = select_branch(branch_method, f, base.transmission, L, geom, noise_floor=opts["noise_floor"],
                        **({"prior_eps_mu": opts["prior_eps_mu"]} if opts["prior_eps_mu"] is not None else {}))
     r = nrw(f, a11, a21, L, geom, branch=br.m, noise_floor=opts["noise_floor"])
+    # independent cross-check of the branch (different information: eps*mu continuity)
+    other = "dp" if branch_method != "dp" else "anchored"
+    br_check = select_branch(other, f, base.transmission, L, geom, noise_floor=opts["noise_floor"])
     conv = {}
     if method == "nrw":
         eps, mu = r.eps, r.mu
@@ -232,7 +235,7 @@ def _core(f, s11, s21, s12, s22, L, geom, method, branch_method, opts):
         conv = {"converged": it.converged, "residual_rms": it.residual_rms}
     else:  # pragma: no cover - validated earlier
         raise ValueError(method)
-    return {"eps": eps, "mu": mu, "nrw": r, "branch": br, "convergence": conv}
+    return {"eps": eps, "mu": mu, "nrw": r, "branch": br, "branch_check": br_check, "convergence": conv}
 
 
 def extract_material_parameters(frequency, s11, s21, thickness, s12=None, s22=None, geometry="coax",
@@ -240,7 +243,7 @@ def extract_material_parameters(frequency, s11, s21, thickness, s12=None, s22=No
                                 holder_length=None, assume_nonmagnetic=False, noise_sigma=1e-3,
                                 noise_floor=None, average_ports=True, multistart=True, bj_formulation="eq2.24+2.25", bj_beta=0.0,
                                 regularization=1e-2, prior_eps_mu=None, uncertainty=None, kk=True,
-                                kk_threshold=3.0, singular_rel_threshold=0.1) -> ExtractionResult:
+                                kk_threshold=None, singular_rel_threshold=0.01) -> ExtractionResult:
     """Extract complex eps_r and mu_r from two-port T/R S-parameters.
 
     Parameters
@@ -263,6 +266,9 @@ def extract_material_parameters(frequency, s11, s21, thickness, s12=None, s22=No
         default: reference-plane invariant; "eq2.25", "eq2.38" with weight beta, "direct").
         The default was chosen from results/studies/bj_formulation.csv (docs/benchmark_report.md).
     uncertainty : None, True (default spec) or nrw.uncertainty.UncertaintySpec.
+    singular_rel_threshold : a frequency is flagged ``singular_region`` (ill-conditioned) when the
+        Cramer-Rao std of eps' at ``noise_sigma`` exceeds this fraction of eps' (default 1 %,
+        about 10x the level of well-conditioned points in the benchmark cases).
     """
     geom = geometry_from_dict({"kind": geometry} if isinstance(geometry, str) else geometry)
     if method not in METHODS:
@@ -323,6 +329,7 @@ def extract_material_parameters(frequency, s11, s21, thickness, s12=None, s22=No
     flags["singular_region"] = ~(rel <= singular_rel_threshold)  # includes NaN
     flags["branch_ambiguous"] = (br.margin < 0.5) if br.margin is not None else np.zeros(len(f), bool)
     flags["branch_unreliable_step"] = np.isin(np.arange(len(f)), br.unreliable_steps)
+    flags["branch_disagreement"] = core["branch_check"].m != br.m
     if "converged" in core["convergence"]:
         flags["not_converged"] = ~np.asarray(core["convergence"]["converged"], bool)
     if "alternative_minimum" in core["convergence"]:
@@ -361,14 +368,18 @@ def extract_material_parameters(frequency, s11, s21, thickness, s12=None, s22=No
             if good.sum() < 5:
                 warn.append(f"KK diagnostic for {q} skipped: fewer than 5 well-conditioned points")
                 continue
-            sig = None
+            sig = sig_i = None
+            lkey = "eps_loss" if q == "eps" else "mu_loss"
+            col = 0 if q == "eps" else 2
             if unc:
-                sig = np.maximum(unc[key]["sigma_percentile"], 1e-6 * np.abs(val.real))
-                sig = sig[good]
-            elif np.isfinite(std[good, 0 if q == "eps" else 2]).all():
-                sig = np.maximum(std[good, 0 if q == "eps" else 2], 1e-3 * np.abs(val.real[good]))
+                sig = np.maximum(unc[key]["sigma_percentile"], 1e-6 * np.abs(val.real))[good]
+                sig_i = np.maximum(unc[lkey]["sigma_percentile"], 1e-6 * np.abs(val.real))[good]
+            elif np.isfinite(std[good, col]).all():
+                sig = np.maximum(std[good, col], 1e-4 * np.abs(val.real[good]))
+                sig_i = np.maximum(std[good, col + 1], 1e-4 * np.abs(val.real[good]))
             try:
-                caus[q] = kk_consistency(f[good], val[good], sigma=sig, threshold=kk_threshold, quantity=q)
+                caus[q] = kk_consistency(f[good], val[good], sigma=sig, sigma_imag=sig_i, threshold=kk_threshold,
+                                         quantity=q)
             except ValueError as e:
                 warn.append(f"KK diagnostic for {q} failed to run: {e}")
 
@@ -380,6 +391,11 @@ def extract_material_parameters(frequency, s11, s21, thickness, s12=None, s22=No
                     "as unreliable")
     if flags["branch_ambiguous"].any():
         warn.append(f"phase-branch ambiguity margin < 0.5 at {int(flags['branch_ambiguous'].sum())} frequencies")
+    if flags["branch_disagreement"].any():
+        warn.append(f"branch strategies '{branch_method}' and '{core['branch_check'].method}' disagree at "
+                    f"{int(flags['branch_disagreement'].sum())} frequencies: the phase branch there is not "
+                    "determined by the data; supply a prior (branch_method='prior'), a second thickness, or "
+                    "denser/lower-frequency data")
     if br.unreliable_steps.size:
         warn.append(f"{br.unreliable_steps.size} unreliable phase steps (|dpsi| > 0.75 pi or |T| at noise floor); "
                     f"branch anchored independently in {len(br.segments) or 1} segment(s)")
@@ -425,10 +441,95 @@ def extract_material_parameters(frequency, s11, s21, thickness, s12=None, s22=No
         warnings=warn,
         metadata={"nrw_version": __version__, "thickness_m": L, "geometry": geom.to_dict(),
                   "reference_plane_offsets_m": [d1, d2], "holder_length_m": holder_length,
-                  "noise_sigma": noise_sigma, "noise_floor": noise_floor, "average_ports": average_ports,
+                  "noise_sigma": noise_sigma, "noise_floor": noise_floor,
+                  "singular_rel_threshold": singular_rel_threshold, "average_ports": average_ports,
                   "regularization": regularization if method == "regularized_eps_mu" else None,
                   "bj_formulation": bj_formulation if method == "baker_jarvis" else None,
                   "bj_beta": bj_beta if method == "baker_jarvis" else None,
                   "conventions": "exp(+jwt); eps = eps' - j eps''; passive => eps'', mu'' >= 0"},
         nrw_baseline=base,
     )
+
+
+def extract_multi_thickness(frequency, measurements, geometry="coax", branch_method="anchored", noise_sigma=1e-3,
+                            singular_rel_threshold=0.01, kk=True):
+    """Simultaneous (eps, mu) from two or more samples of different length (same material).
+
+    measurements: list of dicts {"s11", "s21", optional "s12", "s22", "thickness" (m),
+    optional "reference_plane_offsets"}. Each sample is first processed by the single-sample
+    pipeline (NRW + branch); at every frequency the single-sample solution with the smaller
+    Cramer-Rao std of eps' initialises a joint least-squares fit to all samples
+    (nrw.iterative.solve_eps_mu_multithickness). Identifiability is lost only where all
+    samples are near a half-wavelength condition simultaneously; the joint Cramer-Rao bound
+    (sum of the Fisher informations) is reported and flagged as in the single-sample case.
+    """
+    from .conditioning import real_jacobian
+    from .iterative import solve_eps_mu_multithickness
+
+    if len(measurements) < 2:
+        raise InputError("extract_multi_thickness needs at least two measurements")
+    Ls = [float(m["thickness"]) for m in measurements]
+    if len(set(Ls)) < len(Ls):
+        raise InputError("sample lengths must differ")
+    singles = [extract_material_parameters(frequency, m["s11"], m["s21"], m["thickness"], s12=m.get("s12"),
+                                           s22=m.get("s22"), geometry=geometry, method="iterative_eps_mu",
+                                           branch_method=branch_method, noise_sigma=noise_sigma,
+                                           reference_plane_offsets=m.get("reference_plane_offsets", (0.0, 0.0)),
+                                           multistart=False, kk=False)
+               for m in measurements]
+    f = singles[0].frequency
+    geom = geometry_from_dict({"kind": geometry} if isinstance(geometry, str) else geometry)
+    stds = np.stack([np.where(np.isfinite(r.identifiability["eps_real_std"]), r.identifiability["eps_real_std"],
+                              np.inf) for r in singles])
+    pick = np.argmin(stds, axis=0)
+    e0 = np.choose(pick, [r.epsilon_complex for r in singles])
+    u0 = np.choose(pick, [r.mu_complex for r in singles])
+    samples = []
+    for m, r in zip(measurements, singles):
+        d1, d2 = m.get("reference_plane_offsets", (0.0, 0.0))
+        samples.append({"s11": np.asarray(m["s11"], complex), "s21": np.asarray(m["s21"], complex),
+                        "s12": None if m.get("s12") is None else np.asarray(m["s12"], complex),
+                        "s22": None if m.get("s22") is None else np.asarray(m["s22"], complex),
+                        "length_m": float(m["thickness"]), "d1": d1, "d2": d2})
+    it = solve_eps_mu_multithickness(f, samples, geom, e0, u0)
+    F = np.zeros((len(f), 4, 4))
+    ok = np.isfinite(it.eps) & np.isfinite(it.mu)
+    for smp in samples:  # Fisher information adds over independent samples
+        J = real_jacobian(f[ok], geom, it.eps[ok], it.mu[ok], smp["length_m"], use_s22_s12=smp["s12"] is not None)
+        F[ok] += np.einsum("nop,noq->npq", J, J) / (noise_sigma**2 / 2)
+    std = np.full((len(f), 4), np.nan)
+    with np.errstate(all="ignore"):
+        for k in np.flatnonzero(ok):
+            try:
+                std[k] = np.sqrt(np.clip(np.diag(np.linalg.inv(F[k])), 0, None))
+            except np.linalg.LinAlgError:
+                pass
+    flags = {"singular_region": ~(std[:, 0] / np.maximum(np.abs(it.eps.real), 1e-12) <= singular_rel_threshold),
+             "not_converged": ~it.converged}
+    for i, r in enumerate(singles):
+        flags[f"sample{i}_branch_disagreement"] = r.flags["branch_disagreement"]
+    phys = run_all(f, samples[0]["s11"], samples[0]["s21"], samples[0]["s12"], samples[0]["s22"], it.eps, it.mu)
+    caus = {}
+    if kk:
+        good = ok & ~flags["singular_region"]
+        if good.sum() >= 5:
+            caus["eps"] = kk_consistency(f[good], it.eps[good], sigma=std[good, 0], sigma_imag=std[good, 1],
+                                         quantity="eps")
+            caus["mu"] = kk_consistency(f[good], it.mu[good], sigma=std[good, 2], sigma_imag=std[good, 3],
+                                        quantity="mu")
+    warn = [w for r in singles for w in r.warnings if "branch" in w]
+    if flags["singular_region"].any():
+        warn.append(f"{int(flags['singular_region'].sum())} frequencies remain ill-conditioned for all samples")
+    return ExtractionResult(
+        frequency=f, epsilon_complex=it.eps, mu_complex=it.mu, selected_branch=singles[0].selected_branch,
+        branch_margin=singles[0].branch_margin, reflection_coefficient=singles[0].reflection_coefficient,
+        transmission=singles[0].transmission, propagation_constant=singles[0].propagation_constant,
+        impedance=singles[0].impedance, method="multi_thickness_eps_mu", branch_method=branch_method,
+        convergence={"converged": it.converged, "residual_rms": it.residual_rms, "jacobian_cond": it.jacobian_cond},
+        flags=flags, identifiability={"eps_real_std": std[:, 0], "eps_loss_std": std[:, 1], "mu_real_std": std[:, 2],
+                                      "mu_loss_std": std[:, 3], "noise_sigma_assumed": noise_sigma},
+        passivity=phys, causality=caus, warnings=warn,
+        metadata={"nrw_version": __version__, "thicknesses_m": Ls, "geometry": geom.to_dict(),
+                  "noise_sigma": noise_sigma,
+                  "conventions": "exp(+jwt); eps = eps' - j eps''; passive => eps'', mu'' >= 0"},
+        nrw_baseline=singles[0].nrw_baseline)

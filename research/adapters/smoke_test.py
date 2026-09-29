@@ -8,8 +8,14 @@ reciprocal & symmetric slab so S12 = S21, S22 = S11).
 Cases (required): coax, 2-18 GHz, 401 pts, L = 5 mm
   A: eps = 4 - 0.1j,  mu = 1
   B: eps = 10 - 0.5j, mu = 2 - 0.3j
-Extra (informative): WR-90 waveguide a = 22.86 mm, 8.2-12.4 GHz, 401 pts,
-  L = 5 mm, case A material (only for adapters that claim waveguide support).
+Extra (informative):
+  wg_A:       WR-90 waveguide a = 22.86 mm, 8.2-12.4 GHz, 401 pts, L = 5 mm,
+              case-A material (only for adapters that claim waveguide support);
+  coax_B_L12: case-B material with L = 12 mm (m = 0 at 2 GHz, beta*L ~ 20 rad at
+              18 GHz, i.e. several phase wraps) - probes multi-wrap tracking;
+  coax_B_L30: case-B material with L = 30 mm (beta*L ~ 5.6 rad at 2 GHz, i.e. the
+              correct branch index is m = 1 at the lowest frequency) - probes
+              whether branch selection works beyond "unwrap from principal".
 
 Metric: max over frequency of |x_ext - x_true| / |x_true| for eps, and for mu
 when the adapter returns mu. Also the median, and the fraction of points with
@@ -61,8 +67,14 @@ CASES = {
     "coax_B": dict(geometry={"kind": "coax"}, f=(2e9, 18e9), eps=10 - 0.5j, mu=2 - 0.3j),
     "wg_A": dict(geometry={"kind": "waveguide", "a_m": 0.02286}, f=(8.2e9, 12.4e9),
                  eps=4 - 0.1j, mu=1 + 0j),
+    # informative: m = 0 at 2 GHz but beta*L grows to ~20 rad (several 2*pi wraps)
+    "coax_B_L12": dict(geometry={"kind": "coax"}, f=(2e9, 18e9), eps=10 - 0.5j, mu=2 - 0.3j,
+                       L=12e-3),
+    # informative: thick sample, phase branch m >= 1 already at the lowest frequency
+    "coax_B_L30": dict(geometry={"kind": "coax"}, f=(2e9, 18e9), eps=10 - 0.5j, mu=2 - 0.3j,
+                       L=30e-3),
 }
-L = 5e-3
+L = 5e-3  # default sample length
 N = 401
 
 
@@ -73,10 +85,11 @@ def relerr(x, ref):
 
 def run_case(name, fn, case):
     f = np.linspace(*case["f"], N)
-    s11, s21, s12, s22 = slab_sparams(f, case["eps"], case["mu"], L, case["geometry"])
+    Lc = case.get("L", L)
+    s11, s21, s12, s22 = slab_sparams(f, case["eps"], case["mu"], Lc, case["geometry"])
     t0 = time.time()
     try:
-        out = fn(f, s11, s21, s12, s22, L, dict(case["geometry"]))
+        out = fn(f, s11, s21, s12, s22, Lc, dict(case["geometry"]))
     except NotImplementedError as e:
         return {"status": "unsupported", "msg": str(e)}
     except Exception as e:  # report, do not crash the whole smoke test

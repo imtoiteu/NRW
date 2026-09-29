@@ -101,7 +101,7 @@ def figure(per_f, label, title):
     ax = axs[0]
     names = [("nrw", "classical NRW (ε, μ)"), ("iter_eps_mu", "iterative LSQ (ε, μ)"),
              ("two_thickness", "two-thickness LSQ (ε, μ)"), ("nrw_eps_mu1", "NRW ε with μ = 1"),
-             ("bj_eps", "Baker-Jarvis-type iterative ε (μ = 1)")]
+             ("bj_eps", "NIST ε-only iterative (TN 1341, μ = 1)")]
     for i, (k, lab) in enumerate(names):
         ax.semilogy(f, per_f[f"rmse_eps_real_{k}"], color=SERIES[i], ls=STYLES[i], label=lab)
     ax.semilogy(f, per_f["crlb_eps_real_std_eps_mu"], color="#111111", lw=0.9, ls=(0, (1, 1)),

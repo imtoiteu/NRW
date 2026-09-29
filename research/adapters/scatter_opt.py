@@ -8,6 +8,10 @@ Interface translation (no edits to the external .m files):
   * Octave has no ``table`` class, so a 15-line shim ``array2table.m``
     (research/adapters/octave/shims) returns a struct with the same field
     names; the shim is placed on the Octave path, not in the external tree.
+  * Octave 8 has no ``import`` (it raises "not yet implemented"); every
+    scatter-opt function starts with ``import scatter_opt.*``. A no-op
+    ``import.m`` shim is put on the path together with the ``+scatter_opt``
+    folder itself, so the unqualified internal calls resolve.
   * Default branch selection in the repo is 'rationalfit' (MATLAB RF Toolbox
     ``rationalfit`` - unavailable in Octave). ``extract`` uses
     BranchSelectMethod='manual', BaseBranch=0 (+ its own phase unwrapping of
@@ -37,20 +41,21 @@ eps = out.eps; mu = out.mu;
 save('-v7', outfile, 'eps', 'mu');
 """
     r = run_octave(code, {"f": f, "s11": s11, "s21": s21, "L": thickness_m,
-                          "lam_c": lam_c if np.isfinite(lam_c) else np.inf}, [root])
+                          "lam_c": lam_c if np.isfinite(lam_c) else np.inf},
+                   [root, root / "+scatter_opt"])
     return np.atleast_1d(r["eps"]).astype(complex), np.atleast_1d(r["mu"]).astype(complex)
 
 
 def extract(freq_hz, s11, s21, s12, s22, thickness_m, geometry) -> dict:
     eps, mu = _run(freq_hz, s11, s21, thickness_m, geometry,
-                   "'BranchSelectMethod','manual','BaseBranch',0")
+                   "'manual', false, 'BaseBranch', 0")
     return {"eps": eps, "mu": mu,
             "notes": "scatter-opt nrw_extract (Octave), manual BaseBranch=0 + unwrap(angle(1/T))."}
 
 
 def extract_groupdelay(freq_hz, s11, s21, s12, s22, thickness_m, geometry) -> dict:
     eps, mu = _run(freq_hz, s11, s21, thickness_m, geometry,
-                   "'BranchSelectMethod','GroupDelay','BranchLimits',[-2 2]")
+                   "'GroupDelay', false, 'BranchLimits', [-2 2]")
     return {"eps": eps, "mu": mu,
             "notes": "scatter-opt nrw_extract (Octave), GroupDelay base-branch selection "
                      "(lowest quarter of band) + unwrap."}

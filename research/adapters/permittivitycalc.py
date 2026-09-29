@@ -12,45 +12,40 @@ Interface translation only:
   * The package reports ``avg_*`` = mean of the forward (S11,S21) and reverse
     (S22,S12) results; we return those (they are its headline output).
   * tkinter (used only by file-dialog helpers) is absent from the venv's
-    Python, so a stub module is inserted before import.
+    Python, so a stub module is inserted only while the package is imported.
   * Geometry: the package hard-codes the module global LAM_C = inf (coax). For
     waveguide we temporarily set ``sparam_data.LAM_C = 2a`` in cm (the formulas
     in _permittivity_calc are written for a finite LAM_C) and restore it.
-  * Sign convention: the package forms eps_r = dielec + 1j*lossfac (see its
-    density-normalisation code), and returns ``lossfac = ep_r.imag``; the
-    extraction formulas are written with T = exp(-gamma L) (exp(+jwt)), so for
-    passive data lossfac < 0 already.  We therefore return
-    eps = dielec + 1j*lossfac and mu = mu_real + 1j*mu_imag *without* sign flip.
-    (The smoke test confirms Im eps <= 0 for passive input.)
+  * Sign convention: the package reports ``lossfac`` (and ``mu_imag``) as the
+    loss factor with eps'' >= 0 for passive samples: in _permittivity_calc it
+    builds ln(1/T) = ln(1/|T|) + j*unwrap(angle(T)), i.e. with +arg(T) where
+    exp(+jwt) requires -arg(T); this conjugates gamma. For the NNI (mu = 1) path
+    that is a pure conjugation, so eps_ours = dielec - 1j*lossfac is exact.
+    For the NRW path the conjugated gamma is combined with an *unconjugated*
+    Gamma (from S11), so the result is not a conjugate of the truth and cannot
+    be repaired by a sign convention (for mu = 1 it returns eps = |eps| real and
+    a unit-modulus mu) - a genuine defect, left as is. We apply the package's
+    own convention consistently: eps = dielec - 1j*lossfac,
+    mu = mu_real - 1j*mu_imag.
 """
 from __future__ import annotations
 
 import contextlib
 import io
-import sys
 import warnings
 
 import numpy as np
 
-from ._common import add_path, as_arrays, cutoff_wavelength, ext, stub_module
+from ._common import add_path, as_arrays, cutoff_wavelength, ext, temporary_stubs
 
 _NAME = "permittivitycalc"
 
 
 def _import():
-    if "tkinter" not in sys.modules:
-        try:
-            import tkinter  # noqa: F401
-        except Exception:
-            tk = stub_module("tkinter")
-            fd = stub_module("tkinter.filedialog",
-                             askopenfilename=lambda *a, **k: None,
-                             askdirectory=lambda *a, **k: None)
-            tk.filedialog = fd
     import matplotlib
     matplotlib.use("Agg", force=False)
     add_path(ext(_NAME))
-    with warnings.catch_warnings():
+    with temporary_stubs("tkinter", "tkinter.filedialog"), warnings.catch_warnings():
         warnings.simplefilter("ignore")
         from permittivitycalc import sparam_data
     return sparam_data
@@ -73,10 +68,10 @@ def _run(freq_hz, s11, s21, s12, s22, thickness_m, geometry, nrw):
                                file=None, nrw=nrw)
     finally:
         sd.LAM_C = old
-    eps = np.asarray(a.avg_dielec, float) + 1j * np.asarray(a.avg_lossfac, float)
+    eps = np.asarray(a.avg_dielec, float) - 1j * np.asarray(a.avg_lossfac, float)
     mu = None
     if nrw:
-        mu = np.asarray(a.avg_mu_real, float) + 1j * np.asarray(a.avg_mu_imag, float)
+        mu = np.asarray(a.avg_mu_real, float) - 1j * np.asarray(a.avg_mu_imag, float)
     return eps, mu
 
 
@@ -85,11 +80,11 @@ def extract(freq_hz, s11, s21, s12, s22, thickness_m, geometry) -> dict:
     return {"eps": eps, "mu": mu,
             "notes": "permittivitycalc AirlineData(nrw=True): NRW, np.unwrap(angle T), "
                      "Gamma root test uses complex '<=' (lexicographic, see survey); "
-                     "average of forward/reverse. No sign flip applied."}
+                     "average of forward/reverse; eps = dielec - j*lossfac."}
 
 
 def extract_nni(freq_hz, s11, s21, s12, s22, thickness_m, geometry) -> dict:
     eps, _ = _run(freq_hz, s11, s21, s12, s22, thickness_m, geometry, nrw=False)
     return {"eps": eps, "mu": None,
             "notes": "permittivitycalc AirlineData(nrw=False): Boughriet NNI (mu=1), "
-                     "average of forward/reverse. No sign flip applied."}
+                     "average of forward/reverse; eps = dielec - j*lossfac."}

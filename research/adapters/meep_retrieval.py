@@ -9,7 +9,8 @@ Interface translation:
   * The module imports ``meep`` (FDTD simulator, not pip-installable) and, via
     ``meep_metamaterials.metamaterials``, meep.mpb/meep.geom/IPython/pandas.
     ``eff_parameters`` uses none of them; permissive stub modules are inserted
-    for meep, meep.mpb, meep.geom and IPython.display before import.
+    for meep, meep.mpb, meep.geom and IPython(.display) only while the module
+    is being imported, and removed from sys.modules afterwards.
   * MEEP units: k = 2 pi * freqs with freqs in 1/length; we pass freqs = f/c0
     [1/m] and d in metres.
   * Time convention: MEEP/physics exp(-i w t) (S21 ~ e^{+ink d}, Im n > 0).
@@ -24,7 +25,7 @@ import sys
 
 import numpy as np
 
-from ._common import C0, add_path, as_arrays, ext, require_tem, stub_module
+from ._common import C0, add_path, as_arrays, ext, require_tem, temporary_stubs
 
 _NAME = "meep-metamaterials"
 _mod = None
@@ -36,25 +37,16 @@ def _import():
         return _mod
     import matplotlib
     matplotlib.use("Agg", force=False)
-    try:
-        import meep  # noqa: F401
-    except Exception:
-        stub_module("meep")
-        stub_module("meep.mpb")
-        stub_module("meep.geom")
-        sys.modules["meep"].mpb = sys.modules["meep.mpb"]
-        sys.modules["meep"].geom = sys.modules["meep.geom"]
-    try:
-        import IPython.display  # noqa: F401
-    except Exception:
-        stub_module("IPython")
-        stub_module("IPython.display")
     root = ext(_NAME)
     add_path(root)
     p = root / "meep_metamaterials" / "retrieval" / "retrieval.py"
-    spec = importlib.util.spec_from_file_location("meep_mm_retrieval", p)
-    m = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(m)
+    with temporary_stubs("meep", "meep.mpb", "meep.geom", "IPython", "IPython.display"):
+        spec = importlib.util.spec_from_file_location("meep_mm_retrieval", p)
+        m = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(m)
+        # the package modules imported while stubs were active are dropped too
+        for k in [k for k in sys.modules if k.startswith("meep_metamaterials")]:
+            sys.modules.pop(k, None)
     _mod = m
     return m
 

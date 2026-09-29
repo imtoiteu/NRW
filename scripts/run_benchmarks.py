@@ -26,6 +26,24 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from benchlib import CASES, INTERNAL, ROOT, SCENARIOS, STOCHASTIC, external_algorithms, run_one  # noqa: E402
 
 OUT = ROOT / "results" / "benchmarks"
+# External codes (some run through Octave at 2-10 s per call) are evaluated on a reduced
+# but still discriminating scenario set, with at most 3 seeds per stochastic scenario.
+EXT_SCENARIOS = ["noise_free", "noise_1e-3", "noise_1e-2", "thickness_error", "coarse_grid", "high_start",
+                 "missing_freq", "ref_plane_error"]
+
+
+def _worker(job):
+    alg, cases, scenarios, seeds, internal = job
+    import warnings
+    warnings.filterwarnings("ignore")
+    fn = INTERNAL[alg] if internal else external_algorithms()[alg]
+    rows = []
+    for case in cases:
+        for sc in scenarios:
+            for seed in (range(seeds) if sc in STOCHASTIC else [0]):
+                row, _, _ = run_one(alg, fn, case, sc, seed)
+                rows.append(row)
+    return alg, rows
 
 
 def main():
@@ -35,25 +53,28 @@ def main():
     ap.add_argument("--seeds", type=int, default=5)
     ap.add_argument("--only", default=None, help="comma-separated algorithm names")
     ap.add_argument("--debug", action="store_true")
+    ap.add_argument("--jobs", type=int, default=4)
     args = ap.parse_args()
     OUT.mkdir(parents=True, exist_ok=True)
-    algs = dict(INTERNAL)
-    if not args.no_external:
-        algs.update(external_algorithms())
-    if args.only:
-        keep = set(args.only.split(","))
-        algs = {k: v for k, v in algs.items() if k in keep}
+    ap_jobs = args.jobs
     cases = CASES[:3] if args.quick else CASES
     scenarios = SCENARIOS[:3] if args.quick else SCENARIOS
+    jobs = [(a, cases, scenarios, args.seeds, True) for a in INTERNAL]
+    if not args.no_external:
+        ext_sc = [s for s in EXT_SCENARIOS if s in scenarios]
+        jobs += [(a, cases, ext_sc, min(args.seeds, 3), False) for a in external_algorithms()]
+    if args.only:
+        keep = set(args.only.split(","))
+        jobs = [j for j in jobs if j[0] in keep]
+    algs = [j[0] for j in jobs]
     rows = []
-    for alg, fn in algs.items():
-        for case in cases:
-            for sc in scenarios:
-                seeds = range(args.seeds) if sc in STOCHASTIC else [0]
-                for seed in seeds:
-                    row, _, _ = run_one(alg, fn, case, sc, seed)
-                    rows.append(row)
-        print(f"{alg:28s} done ({sum(r['algorithm'] == alg for r in rows)} runs)", flush=True)
+    from concurrent.futures import ProcessPoolExecutor, as_completed
+    with ProcessPoolExecutor(max_workers=ap_jobs) as ex:
+        futs = [ex.submit(_worker, j) for j in jobs]
+        for fu in as_completed(futs):
+            alg, r = fu.result()
+            rows += r
+            print(f"{alg:28s} done ({len(r)} runs)", flush=True)
     df = pd.DataFrame(rows)
     df.to_csv(OUT / "raw.csv", index=False)
 
@@ -80,7 +101,7 @@ def main():
     env = {"timestamp_utc": datetime.now(timezone.utc).isoformat(), "python": platform.python_version(),
            "numpy": np.__version__, "scipy": scipy.__version__, "pandas": pd.__version__,
            "platform": platform.platform(), "seeds_per_stochastic_scenario": args.seeds,
-           "algorithms": list(algs), "cases": [c.name for c in cases], "scenarios": scenarios,
+           "algorithms": algs, "external_scenarios": EXT_SCENARIOS, "cases": [c.name for c in cases], "scenarios": scenarios,
            "failure_definition": "fraction of frequencies with |eps-eps_true|/|eps_true| > 10% or "
                                  "|mu-mu_true|/|mu_true| > 10% or non-finite"}
     (OUT / "environment.json").write_text(json.dumps(env, indent=2))

@@ -72,11 +72,37 @@ def _pv_integral_piecewise_linear(x, y, w):
     return out
 
 
+def kk_kernel_matrix(x, w):
+    """Matrix K with  P int_{x0}^{xN} x' y(x')/(x'^2 - w^2) dx' = K @ y  for piecewise-linear y.
+
+    Column j is the integral of the hat function centred on node j, assembled analytically
+    segment by segment (same antiderivative as ``_pv_integral_piecewise_linear``; ln 0 := 0
+    implements the principal value at nodes, see that function). Shape (len(w), len(x)).
+    """
+    x = np.asarray(x, float)
+    w = np.atleast_1d(np.asarray(w, float))[:, None]
+    xa, xb = x[:-1][None, :], x[1:][None, :]
+    h = xb - xa
+
+    def seg(p, q):
+        with np.errstate(divide="ignore", invalid="ignore"):
+            lp = np.log(xb + w) - np.log(xa + w)
+            db, da = np.abs(xb - w), np.abs(xa - w)
+            lm = np.where(db > 0, np.log(np.where(db > 0, db, 1.0)), 0.0) - np.where(
+                da > 0, np.log(np.where(da > 0, da, 1.0)), 0.0)
+        return q * h + (p - q * w) / 2 * lp + (p + q * w) / 2 * lm
+
+    K = np.zeros((w.shape[0], len(x)))
+    K[:, :-1] += seg(xb / h, -1 / h)  # falling half of hat k on segment k
+    K[:, 1:] += seg(-xa / h, 1 / h)  # rising half of hat k+1 on segment k
+    return K
+
+
 def kk_real_from_imag_finite(f, loss, f_eval=None):
     """(2/pi) P int_{f1}^{f2} f' loss(f') / (f'^2 - f^2) df' (dimensionless; Hz units cancel)."""
     f = np.asarray(f, float)
     fe = f if f_eval is None else np.asarray(f_eval, float)
-    return (2 / np.pi) * _pv_integral_piecewise_linear(f, loss, fe)
+    return (2 / np.pi) * kk_kernel_matrix(f, fe) @ np.asarray(loss, float)
 
 
 @dataclass
@@ -94,6 +120,7 @@ class KKResult:
     assumptions: list = field(default_factory=list)
     max_abs_normalized_residual: float = np.nan
     rms_normalized_residual: float = np.nan
+    threshold: float = np.nan
 
 
 def _passive_tail_basis(f, loss, fa, n_tail, tail_span):
@@ -118,28 +145,50 @@ def _passive_tail_basis(f, loss, fa, n_tail, tail_span):
     y_base[i0 : i0 + len(f)] = loss
     ev = np.concatenate([f, [fa]])
 
-    def anchored(y):
-        v = kk_real_from_imag_finite(X, y, ev)
-        return v[:-1] - v[-1]
-
-    base = anchored(y_base)
-    cols = []
-    for j in list(range(1, 1 + len(low))) + list(range(i0 + len(f), i0 + len(f) + len(high))):
-        y = np.zeros(len(X))
-        y[j] = 1.0
-        cols.append(anchored(y))
+    K = (2 / np.pi) * kk_kernel_matrix(X, ev)
+    K = K[:-1] - K[-1][None, :]  # anchored (singly subtractive)
+    base = K @ y_base
+    hat_idx = list(range(1, 1 + len(low))) + list(range(i0 + len(f), i0 + len(f) + len(high)))
+    cols = [K[:, j] for j in hat_idx]
     return base, np.stack(cols, axis=1)
 
 
-def kk_consistency(f, value, sigma=None, rel_tol=0.01, anchor="center", n_tail=24, tail_span=100.0,
-                   threshold=3.0, quantity="eps"):
+def _discretization_error(f, loss):
+    """Self-estimate of the piecewise-linear quadrature error of the in-band KK integral.
+
+    The in-band integral is recomputed from every other sample; for piecewise-linear
+    interpolation the error scales ~h^2, so |I_h - I_2h| (interpolated to all points) is a
+    conservative (~3x) estimate of the error of I_h.
+    """
+    if len(f) < 9:
+        return np.zeros(len(f))
+    full = kk_real_from_imag_finite(f, loss)
+    half = kk_real_from_imag_finite(f[::2], loss[::2], f)
+    err = np.abs(full - half)
+    # anchored form: the anchor's own error enters every point
+    return err + err[len(f) // 2]
+
+
+def kk_consistency(f, value, sigma=None, sigma_imag=None, rel_tol=0.01, anchor="center", n_tail=48,
+                   tail_span=100.0, threshold=None, alpha=0.01, quantity="eps"):
     """Finite-band, singly-subtractive KK consistency test with a passive out-of-band tail.
 
-    value : complex eps (or mu) on the band, exp(+jwt) convention.
-    sigma : standard uncertainty of Re(value) per frequency (e.g. from Monte Carlo). If
-            None, ``rel_tol * |value|`` is used and the statement says so.
+    value      : complex eps (or mu) on the band, exp(+jwt) convention.
+    sigma      : standard uncertainty of Re(value) per frequency (e.g. Monte Carlo). If None,
+                 ``rel_tol * |value|`` is used and the statement says so.
+    sigma_imag : standard uncertainty of the loss part; defaults to ``sigma``. It enters the
+                 residual because the KK prediction is computed from the measured loss (the
+                 Hilbert transform approximately preserves the rms of white noise).
+    threshold  : pass if max |residual| / sigma_total <= threshold. Default (None): Bonferroni
+                 family-wise threshold z = Phi^-1(1 - alpha / (2 N)), so that data consistent
+                 with the assumptions fail with probability <= alpha (conservative, because
+                 residuals are positively correlated).
+    Residual scale: sigma_total^2 = sigma^2 + sigma_imag^2 + sigma_num^2, with sigma_num the
+    self-estimated quadrature error (``_discretization_error``).
     Returns a KKResult whose ``statement`` is the only wording the software endorses.
     """
+    from scipy.stats import norm
+
     f = np.asarray(f, float)
     v = np.asarray(value, complex)
     ok = np.isfinite(v)
@@ -150,9 +199,14 @@ def kk_consistency(f, value, sigma=None, rel_tol=0.01, anchor="center", n_tail=2
     f, v = f[ok], v[ok]
     loss = -v.imag
     real = v.real
-    sig = rel_tol * np.abs(v) if sigma is None else np.asarray(sigma, float)[ok]
+    sig_r = rel_tol * np.abs(v) if sigma is None else np.asarray(sigma, float)[ok]
+    sig_i = sig_r if sigma_imag is None else np.asarray(sigma_imag, float)[ok]
+    sig_num = _discretization_error(f, loss)
+    sig = np.sqrt(sig_r**2 + sig_i**2 + sig_num**2)
     sig = np.maximum(sig, 1e-12)
-    k0 = len(f) // 2 if anchor == "center" else int(anchor)
+    N = len(f)
+    thr = float(norm.isf(alpha / (2 * N))) if threshold is None else float(threshold)
+    k0 = N // 2 if anchor == "center" else int(anchor)
     fa = f[k0]
     base, Phi = _passive_tail_basis(f, loss, fa, n_tail, tail_span)
     pred0 = real[k0] + base
@@ -167,26 +221,28 @@ def kk_consistency(f, value, sigma=None, rel_tol=0.01, anchor="center", n_tail=2
     nres = res / sig
     mx = float(np.max(np.abs(nres)))
     rms = float(np.sqrt(np.mean(nres**2)))
-    passed = bool(mx <= threshold)
+    passed = bool(mx <= thr)
     assumptions = [
         f"band limited to {f1/1e9:.4g}-{f2/1e9:.4g} GHz; out-of-band behaviour unknown",
         "out-of-band loss assumed passive (non-negative), continuous at the band edges and "
         f"piecewise-linear on {2 * max(n_tail // 2, 2)} log-spaced nodes within x{tail_span:g} of the band edges",
-        f"{quantity}'' interpolated piecewise-linearly between measured points",
+        f"{quantity}'' interpolated piecewise-linearly between measured points (quadrature error self-estimated)",
         f"singly-subtractive form anchored at {fa/1e9:.4g} GHz (removes the unknown {quantity}_inf)",
-        "uncertainty: " + ("supplied sigma" if sigma is not None else f"assumed {rel_tol:g} x |{quantity}|"),
-        f"pass threshold: max |residual|/sigma <= {threshold:g}",
+        "uncertainty: " + ("supplied sigma" if sigma is not None else f"assumed {rel_tol:g} x |{quantity}|")
+        + "; loss-part uncertainty " + ("supplied" if sigma_imag is not None else "taken equal"),
+        f"pass threshold: max |residual|/sigma_total <= {thr:.3g}"
+        + (f" (Bonferroni, alpha = {alpha:g}, N = {N})" if threshold is None else " (user threshold)"),
     ]
     if passed:
         statement = ("KK consistency diagnostic passed within the available bandwidth and assumptions: "
                      f"Re({quantity}) is reproduced from Im({quantity}) by a finite-band subtractive KK "
-                     "relation plus a passive out-of-band continuation, to within "
-                     f"{threshold:g} standard uncertainties. This does NOT establish that the material "
-                     "strictly satisfies the global Kramers-Kronig relations.")
+                     "relation plus a passive out-of-band continuation, within the stated uncertainty "
+                     f"(max normalised residual {mx:.3g} <= {thr:.3g}). This does NOT establish that the "
+                     "material strictly satisfies the global Kramers-Kronig relations.")
     else:
         statement = ("KK consistency diagnostic FAILED within the available bandwidth and assumptions: no "
-                     "passive out-of-band continuation reproduces Re from Im to within "
-                     f"{threshold:g} standard uncertainties (max {mx:.3g}). Possible causes: extraction "
-                     "error (e.g. wrong phase branch, half-wavelength artefacts), underestimated "
-                     "uncertainty, systematic errors, or non-passive/ill-posed data.")
-    return KKResult(f, real, pred, res, nres, c, k0, sig, passed, statement, assumptions, mx, rms)
+                     "passive out-of-band continuation reproduces Re from Im within the stated uncertainty "
+                     f"(max normalised residual {mx:.3g} > {thr:.3g}). Possible causes: extraction error "
+                     "(e.g. wrong phase branch, half-wavelength artefacts, uncorrected reference planes), "
+                     "underestimated uncertainty, other systematic errors, or non-passive/ill-posed data.")
+    return KKResult(f, real, pred, res, nres, c, k0, sig, passed, statement, assumptions, mx, rms, thr)

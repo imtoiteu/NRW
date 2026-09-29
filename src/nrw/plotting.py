@@ -190,7 +190,7 @@ def plot_kk(caus: dict, path):
         ax.set_title(f"{q}: {'consistent' if r.passed else 'NOT consistent'} (finite-band diagnostic)", loc="left")
         ax = axs[row, 1]
         ax.plot(f, r.normalized_residual, color=SERIES[0])
-        thr = float(r.assumptions[-1].split("<=")[-1]) if r.assumptions else 3.0
+        thr = r.threshold
         for s in (-thr, thr):
             ax.axhline(s, color=INK_MUTED, ls=":", lw=0.8)
         ax.set_ylabel("residual / σ")

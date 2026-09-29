@@ -90,3 +90,24 @@ def test_monte_carlo_seeded_and_summaries(coax):
     assert np.array_equal(a["eps_real"]["median"], b["eps_real"]["median"])
     assert np.all(a["eps_real"]["p2.5"] <= a["eps_real"]["p97.5"])
     assert np.all(a["eps_real"]["sigma_robust"] > 0)
+
+
+def test_kk_kernel_matches_reference_loop():
+    from nrw.kk import _pv_integral_piecewise_linear, kk_kernel_matrix
+    rng = np.random.default_rng(0)
+    x = np.sort(rng.uniform(1, 10, 60))
+    y = rng.normal(size=60)
+    w = np.concatenate([x[3:12], [2.3, 7.7]])  # includes exact node hits (principal value)
+    assert np.allclose(kk_kernel_matrix(x, w) @ y, _pv_integral_piecewise_linear(x, y, w), atol=1e-11)
+
+
+def test_kk_false_alarm_rate_is_controlled(band):
+    """Causal data + white noise of the stated size must pass (Bonferroni, alpha = 0.01)."""
+    m = Debye(3, 7, 5e9)
+    rng = np.random.default_rng(42)
+    sig = 2e-3
+    passes = 0
+    for _ in range(10):
+        v = m(band) + sig * rng.standard_normal(len(band)) - 1j * sig * rng.standard_normal(len(band))
+        passes += kk_consistency(band, v, sigma=np.full(len(band), sig)).passed
+    assert passes >= 9
