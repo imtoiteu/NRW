@@ -1,0 +1,19 @@
+| condition | principal | unwrap | group_delay | anchored | dp |
+|---|---|---|---|---|---|
+| baseline | 0.828 | 0 | 0 | 0 | 0 |
+| start_8GHz | 1 | 1 | 0 | 0 | 0 |
+| start_8GHz_thick | 1 | 1 | 0 | 0 | 0 |
+| grid_101 | 0.822 | 0 | 0 | 0 | 0 |
+| grid_33 | 0.818 | 0 | 0 | 0 | 0 |
+| grid_17 | 0.824 | 0 | 0 | 0 | 0 |
+| grid_17_thick | 1 | 1 | 0 | 0 | 0 |
+| grid_17_60mm_aliased | 1 | 1 | 1 | 0.941 | 0 |
+| noise_1e-2 | 0.828 | 0.00224 | 0.117 | 0.00224 | 0.00224 |
+| noise_3e-2 | 0.828 | 0.00524 | 0.481 | 0.00524 | 0.00673 |
+| thick_30mm | 1 | 1 | 0 | 0 | 0 |
+| thick_60mm | 1 | 1 | 0 | 0 | 0 |
+| dispersive_lorentz_inband | 0.481 | 0.326 | 0.541 | 0.424 | 0.518 |
+| dispersive_debye_below_band | 0.691 | 4.99e-04 | 4.99e-04 | 4.99e-04 | 4.99e-04 |
+| lossy_S21_near_floor | 0.945 | 0.00424 | 0.416 | 0.00424 | 0.174 |
+| missing_band_8_12GHz | 0.77 | 0 | 0 | 0 | 0 |
+| missing_band_thick | 1 | 1 | 0 | 0 | 0 |

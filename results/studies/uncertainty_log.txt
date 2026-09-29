@@ -1,0 +1,14 @@
+magnetodielectric_composite_2mm
+lowloss_dielectric_10mm_bj
+lowloss_dielectric_10mm_eps_mu
+                           case quantity  coverage_all  coverage_well  coverage_ill  median_mc_sigma  median_abs_error  reps
+     lowloss_dielectric_10mm_bj eps_loss      0.917284       0.917284           NaN         0.005887          0.004221    20
+     lowloss_dielectric_10mm_bj eps_real      0.908025       0.908025           NaN         0.014479          0.011977    20
+ lowloss_dielectric_10mm_eps_mu eps_loss      0.921605       0.923621      0.903571         0.027552          0.019999    20
+ lowloss_dielectric_10mm_eps_mu eps_real      0.925309       0.925019      0.928571         0.024117          0.019317    20
+ lowloss_dielectric_10mm_eps_mu  mu_loss      0.921605       0.922862      0.909821         0.006708          0.004926    20
+ lowloss_dielectric_10mm_eps_mu  mu_real      0.917284       0.915531      0.935714         0.006361          0.004619    20
+magnetodielectric_composite_2mm eps_loss      0.929630       0.929630           NaN         0.043906          0.030135    20
+magnetodielectric_composite_2mm eps_real      0.914815       0.914815           NaN         0.053452          0.039895    20
+magnetodielectric_composite_2mm  mu_loss      0.925309       0.925309           NaN         0.009912          0.007219    20
+magnetodielectric_composite_2mm  mu_real      0.896914       0.896914           NaN         0.012168          0.009832    20

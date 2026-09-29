@@ -19,7 +19,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from benchlib import CASE_BY_NAME, INTERNAL, ROOT, external_algorithms, make_dataset  # noqa: E402
 
 from nrw import extract_material_parameters  # noqa: E402
-from nrw.plotting import FLAG_FILL, SERIES, STYLES, TRUTH, _shade, plot_result, plt  # noqa: E402
+from nrw.plotting import SERIES, STYLES, TRUTH, _shade, apply_style, plot_result, plt  # noqa: E402
 
 FIG = ROOT / "results" / "figures"
 PANELS = [("ε'", lambda e, m: e.real), ("ε''", lambda e, m: -e.imag), ("μ'", lambda e, m: m.real),
@@ -60,23 +60,27 @@ def compare(case_name, scenario, ext_name, seed=0):
         res = final_workflow(d, case)
     curves.append((f"final workflow ({res.method})", {"eps": res.epsilon_complex, "mu": res.mu_complex}))
     f = d.f / 1e9
+    apply_style()
     npan = 4 if case.magnetic else 2
     fig, axs = plt.subplots(1 if npan == 2 else 2, 2, figsize=(7.0, 2.7 if npan == 2 else 4.8),
                             constrained_layout=True, squeeze=False)
     for ax, (lab, fn) in zip(axs.ravel(), PANELS[:npan]):
         _shade(ax, f, res.singular_region, "flagged ill-conditioned")
         tv = fn(d.eps_true, d.mu_true)
+        span = np.ptp(tv) + 0.05 * np.max(np.abs(tv)) + 0.02
+        lo, hi = np.min(tv) - 1.2 * span, np.max(tv) + 1.2 * span
         for i, (name, out) in enumerate(curves):
             y = fn(np.asarray(out["eps"]), np.asarray(out["mu"]))
-            ax.plot(f, y, color=SERIES[i], ls=STYLES[i], lw=1.2, label=name,
+            off = np.mean(~((y >= lo) & (y <= hi)))
+            label = name + (f" [{off:.0%} of points off scale]" if off > 0.02 else "")
+            ax.plot(f, y, color=SERIES[i], ls=STYLES[i], lw=1.2, label=label,
                     marker="o" if len(f) < 60 else None, ms=2.5)
         ax.plot(f, tv, **TRUTH)
         ax.set_ylabel(lab)
-        span = np.ptp(tv) + 0.05 * np.max(np.abs(tv)) + 0.02
-        ax.set_ylim(np.min(tv) - 1.2 * span, np.max(tv) + 1.2 * span)
+        ax.set_ylim(lo, hi)
+        ax.legend(fontsize=5.5, loc="best")
     for ax in axs[-1]:
         ax.set_xlabel("Frequency (GHz)")
-    axs[0, 0].legend(fontsize=6, loc="best")
     fig.suptitle(f"{case_name} — {scenario} (SYNTHETIC)", fontsize=8.5, x=0.02, ha="left")
     FIG.mkdir(parents=True, exist_ok=True)
     p = FIG / f"compare_{case_name}_{scenario}.png"

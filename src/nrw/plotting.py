@@ -21,12 +21,25 @@ TRUTH = dict(color="#111111", ls=(0, (4, 2)), lw=1.2, label="ground truth")
 INK_MUTED = "#6b6b66"
 FLAG_FILL = "#e9e7e1"
 
-plt.rcParams.update({
+STYLE = {
     "figure.dpi": 150, "savefig.dpi": 300, "font.size": 9, "axes.titlesize": 9, "axes.labelsize": 9,
     "legend.fontsize": 7.5, "axes.spines.top": False, "axes.spines.right": False, "axes.grid": True,
     "grid.color": "#e6e5df", "grid.linewidth": 0.6, "lines.linewidth": 1.4, "axes.edgecolor": "#8a8a84",
     "xtick.color": "#4a4a45", "ytick.color": "#4a4a45", "legend.frameon": False,
-})
+}
+
+
+def apply_style():
+    """Reset matplotlib to defaults + this module's style.
+
+    Called by every figure function: third-party imports (e.g. seaborn, pulled in by some
+    external codes evaluated in research/) change global rcParams on import.
+    """
+    matplotlib.rcdefaults()
+    plt.rcParams.update(STYLE)
+
+
+apply_style()
 
 
 def _shade(ax, f_ghz, mask, label=None):
@@ -45,6 +58,7 @@ def _shade(ax, f_ghz, mask, label=None):
 
 def plot_result(res, outdir, truth=None, prefix=""):
     """Standard figure set for an ExtractionResult; returns list of written paths."""
+    apply_style()
     outdir = Path(outdir)
     outdir.mkdir(parents=True, exist_ok=True)
     f = res.frequency / 1e9
@@ -110,6 +124,7 @@ def _robust_ylim(ax, y, u=None, truth_vals=None, pad=0.15):
 
 def plot_diagnostics(res, path):
     """Branch index, NRW singularity indicators, identifiability and passivity."""
+    apply_style()
     f = res.frequency / 1e9
     base = res.nrw_baseline
     fig, axs = plt.subplots(4, 1, figsize=(6.0, 6.6), sharex=True, constrained_layout=True)
@@ -179,6 +194,7 @@ def plot_diagnostics(res, path):
 
 
 def plot_kk(caus: dict, path):
+    apply_style()
     fig, axs = plt.subplots(len(caus), 2, figsize=(7.0, 2.4 * len(caus)), constrained_layout=True, squeeze=False)
     for row, (q, r) in enumerate(caus.items()):
         f = r.frequency / 1e9

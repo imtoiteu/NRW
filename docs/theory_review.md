@@ -158,6 +158,13 @@ The S-matrix is therefore [[0, T], [T, 0]], independent of z. The consequences a
   Boughriet formula) show no λ/2 divergence (§4, §5). They supply the missing information, μ_r,
   by assumption.
 
+**Numerical confirmation (this project).** `nrw.conditioning` computes the Cramér–Rao bound [R40]
+of (ε′, ε″, μ′, μ″) from the exact Jacobian of the S-parameters. For ε = 4 − 0.004j, μ = 1,
+L = 20 mm and σ = 10⁻³, the bound on ε′ rises from ≈ 0.006 away from resonance to 0.136 (RMS)
+within |βL/π − k| < 0.05. Classical NRW and iterative least squares both attain it: RMSE 0.131
+(`results/studies/singularity_summary.csv`; `docs/benchmark_report.md` §3). With μ fixed to 1
+the bound is 5.2 × 10⁻⁴ near the resonances (8.3 × 10⁻⁴ RMS over the band); it does not spike.
+
 The half-wave condition refers to the guided wavelength in the sample,
 λ_g = 2π/β = 2π/Im γ. For TE10 this is not λ_0/√(ε'μ').
 

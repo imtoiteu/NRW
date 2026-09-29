@@ -1,0 +1,16 @@
+     study     algorithm  sigma  n_seeds  rmse_eps_real_all  rmse_eps_real_near_halfwave  rmse_eps_real_away  max_abs_err_eps  rmse_mu_real_all  max_abs_err_mu  mean_abs_bias_eps_real_away  nonfinite
+dielectric           nrw  0.001     20.0           0.040078                     0.130528            0.005963         2.173983          0.010455        0.436243                 5.473959e-06        0.0
+dielectric   iter_eps_mu  0.001     20.0           0.040078                     0.130528            0.005963         2.173983          0.010455        0.436243                 5.473959e-06        0.0
+dielectric   nrw_eps_mu1  0.001     20.0           0.001084                     0.001096            0.001082         0.010954          0.000000        0.000000                 4.116716e-07        0.0
+dielectric        bj_eps  0.001     20.0           0.000886                     0.000594            0.000911         0.010835          0.000000        0.000000                 1.392868e-06        0.0
+dielectric two_thickness  0.001     20.0           0.003217                     0.005805            0.002824         0.035214          0.000795        0.008985                 3.200647e-05        0.0
+dielectric   CRLB_eps_mu    NaN      NaN           0.041625                     0.135677            0.005935              NaN               NaN             NaN                          NaN        NaN
+dielectric CRLB_eps_only    NaN      NaN           0.000833                     0.000524            0.000859              NaN               NaN             NaN                          NaN        NaN
+   study     algorithm  sigma  n_seeds  rmse_eps_real_all  rmse_eps_real_near_halfwave  rmse_eps_real_away  max_abs_err_eps  rmse_mu_real_all  max_abs_err_mu  mean_abs_bias_eps_real_away  nonfinite
+magnetic           nrw  0.001     20.0           0.028980                     0.093304            0.005220         1.650764          0.010426        0.565616                 1.268808e-05        0.0
+magnetic   iter_eps_mu  0.001     20.0           0.028980                     0.093304            0.005220         1.650764          0.010426        0.565616                 1.268808e-05        0.0
+magnetic   nrw_eps_mu1  0.001     20.0           1.999997                     2.000048            1.999991         2.009940          0.500000        0.500009                 1.999991e+00        0.0
+magnetic        bj_eps  0.001     20.0           2.034632                     2.001219            2.038052         2.840227          0.500000        0.500009                 2.027565e+00        0.0
+magnetic two_thickness  0.001     20.0           0.002953                     0.005244            0.002603         0.036629          0.001100        0.013827                 2.650726e-07        0.0
+magnetic   CRLB_eps_mu    NaN      NaN           0.027232                     0.087520            0.005188              NaN               NaN             NaN                          NaN        NaN
+magnetic CRLB_eps_only    NaN      NaN           0.000644                     0.000568            0.000651              NaN               NaN             NaN                          NaN        NaN

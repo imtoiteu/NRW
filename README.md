@@ -44,7 +44,7 @@ data are included (see `data/raw/README.md`).
 uv venv .venv -p 3.12            # or: python3.12 -m venv .venv
 uv pip install -p .venv/bin/python -e ".[dev]"
 # exact versions used for the shipped results:
-uv pip install -p .venv/bin/python -r requirements-lock.txt
+uv pip install -p .venv/bin/python -r requirements-lock.txt --extra-index-url https://download.pytorch.org/whl/cpu
 ```
 
 Optional, only to re-run the third-party comparison: `scripts/fetch_external.sh`

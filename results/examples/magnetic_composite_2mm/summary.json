@@ -20,6 +20,7 @@
     "singular_region": 0,
     "branch_ambiguous": 0,
     "branch_unreliable_step": 0,
+    "branch_disagreement": 0,
     "not_converged": 0,
     "alternative_minimum": 0,
     "mc_branch_unstable": 0
@@ -120,29 +121,29 @@
   "causality": {
     "eps": {
       "passed": true,
-      "statement": "KK consistency diagnostic passed within the available bandwidth and assumptions: Re(eps) is reproduced from Im(eps) by a finite-band subtractive KK relation plus a passive out-of-band continuation, to within 3 standard uncertainties. This does NOT establish that the material strictly satisfies the global Kramers-Kronig relations.",
+      "statement": "KK consistency diagnostic passed within the available bandwidth and assumptions: Re(eps) is reproduced from Im(eps) by a finite-band subtractive KK relation plus a passive out-of-band continuation, within the stated uncertainty (max normalised residual 0.573 <= 4.37). This does NOT establish that the material strictly satisfies the global Kramers-Kronig relations.",
       "assumptions": [
         "band limited to 2-18 GHz; out-of-band behaviour unknown",
-        "out-of-band loss assumed passive (non-negative), continuous at the band edges and piecewise-linear on 24 log-spaced nodes within x100 of the band edges",
-        "eps'' interpolated piecewise-linearly between measured points",
+        "out-of-band loss assumed passive (non-negative), continuous at the band edges and piecewise-linear on 48 log-spaced nodes within x100 of the band edges",
+        "eps'' interpolated piecewise-linearly between measured points (quadrature error self-estimated)",
         "singly-subtractive form anchored at 10 GHz (removes the unknown eps_inf)",
-        "uncertainty: supplied sigma",
-        "pass threshold: max |residual|/sigma <= 3"
+        "uncertainty: supplied sigma; loss-part uncertainty supplied",
+        "pass threshold: max |residual|/sigma_total <= 4.37 (Bonferroni, alpha = 0.01, N = 801)"
       ],
-      "max_abs_normalized_residual": 0.9226456412911785
+      "max_abs_normalized_residual": 0.5725400979603688
     },
     "mu": {
       "passed": true,
-      "statement": "KK consistency diagnostic passed within the available bandwidth and assumptions: Re(mu) is reproduced from Im(mu) by a finite-band subtractive KK relation plus a passive out-of-band continuation, to within 3 standard uncertainties. This does NOT establish that the material strictly satisfies the global Kramers-Kronig relations.",
+      "statement": "KK consistency diagnostic passed within the available bandwidth and assumptions: Re(mu) is reproduced from Im(mu) by a finite-band subtractive KK relation plus a passive out-of-band continuation, within the stated uncertainty (max normalised residual 0.66 <= 4.37). This does NOT establish that the material strictly satisfies the global Kramers-Kronig relations.",
       "assumptions": [
         "band limited to 2-18 GHz; out-of-band behaviour unknown",
-        "out-of-band loss assumed passive (non-negative), continuous at the band edges and piecewise-linear on 24 log-spaced nodes within x100 of the band edges",
-        "mu'' interpolated piecewise-linearly between measured points",
+        "out-of-band loss assumed passive (non-negative), continuous at the band edges and piecewise-linear on 48 log-spaced nodes within x100 of the band edges",
+        "mu'' interpolated piecewise-linearly between measured points (quadrature error self-estimated)",
         "singly-subtractive form anchored at 10 GHz (removes the unknown mu_inf)",
-        "uncertainty: supplied sigma",
-        "pass threshold: max |residual|/sigma <= 3"
+        "uncertainty: supplied sigma; loss-part uncertainty supplied",
+        "pass threshold: max |residual|/sigma_total <= 4.37 (Bonferroni, alpha = 0.01, N = 801)"
       ],
-      "max_abs_normalized_residual": 0.8745858980483301
+      "max_abs_normalized_residual": 0.6599141099603983
     }
   },
   "warnings": [
@@ -163,8 +164,11 @@
     "holder_length_m": null,
     "noise_sigma": 0.001,
     "noise_floor": 0.003,
+    "singular_rel_threshold": 0.01,
     "average_ports": true,
     "regularization": null,
+    "bj_formulation": null,
+    "bj_beta": null,
     "conventions": "exp(+jwt); eps = eps' - j eps''; passive => eps'', mu'' >= 0",
     "input_file": "data/synthetic/synthetic_magnetic_composite_2mm.s2p",
     "touchstone_z0_ohm": 50.0

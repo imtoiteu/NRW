@@ -1,0 +1,133 @@
+case,variant,quantity,seed,passed,max_norm_residual,median_rel_error_of_input
+debye_dielectric,truth,eps,0,True,0.01645540302836409,0.0
+debye_dielectric,correct_extraction_noise1e-3,eps,0,True,2.411640478673513,0.0010666397927383588
+debye_dielectric,correct_extraction_noise1e-3,eps,1,True,2.3124643677816707,0.0010125184713861617
+debye_dielectric,correct_extraction_noise1e-3,eps,2,True,2.52778554474607,0.0010882386916082833
+debye_dielectric,correct_extraction_noise1e-3,eps,3,True,2.496351160204196,0.0010737273664775207
+debye_dielectric,correct_extraction_noise1e-3,eps,4,True,2.460825114198879,0.001068248745680903
+debye_dielectric,wrong_branch_plus1,eps,0,False,29826.66769790899,13.793821373210863
+debye_dielectric,wrong_branch_plus1,eps,1,False,30260.294690048824,13.79358642810622
+debye_dielectric,wrong_branch_plus1,eps,2,False,36957.26761397149,13.794873989537363
+debye_dielectric,wrong_branch_plus1,eps,3,False,32398.872836139355,13.795212968900277
+debye_dielectric,wrong_branch_plus1,eps,4,False,37316.83677873184,13.795959709289031
+debye_dielectric,thickness_error_1pct,eps,0,False,4.676557276351802,0.019709112122220363
+debye_dielectric,ref_plane_error_50um,eps,0,False,6.674389094917845,0.009073079148753556
+debye_dielectric,air_gap_10um,eps,0,True,0.014310737748766972,0.04787750239327747
+debye_dielectric,holder_mismatch_51ohm,eps,0,False,14.270755652954124,0.007244224439980634
+lorentz_dielectric,truth,eps,0,True,0.5915694108705861,0.0
+lorentz_dielectric,correct_extraction_noise1e-3,eps,0,True,2.451761548917698,0.0010700347704913386
+lorentz_dielectric,correct_extraction_noise1e-3,eps,1,True,2.120284147180764,0.0010006047432480813
+lorentz_dielectric,correct_extraction_noise1e-3,eps,2,True,2.5516333490586702,0.0010634074294012005
+lorentz_dielectric,correct_extraction_noise1e-3,eps,3,True,2.9467007993235517,0.0010591615739498545
+lorentz_dielectric,correct_extraction_noise1e-3,eps,4,True,2.223259723245707,0.0010275487725984339
+lorentz_dielectric,wrong_branch_plus1,eps,0,False,107395.25285746614,19.13669202877614
+lorentz_dielectric,wrong_branch_plus1,eps,1,False,149361.71733824868,19.134750155418175
+lorentz_dielectric,wrong_branch_plus1,eps,2,False,161907.41882478772,19.18068511772216
+lorentz_dielectric,wrong_branch_plus1,eps,3,False,100044.65753416465,19.11950947657062
+lorentz_dielectric,wrong_branch_plus1,eps,4,False,124348.99928105429,19.156845482381307
+lorentz_dielectric,thickness_error_1pct,eps,0,False,23.663039567733772,0.017962007749188352
+lorentz_dielectric,ref_plane_error_50um,eps,0,False,48.595311683381546,0.012418899824250968
+lorentz_dielectric,air_gap_10um,eps,0,True,0.5768791967405738,0.05140842269948816
+lorentz_dielectric,holder_mismatch_51ohm,eps,0,False,48.98668764058406,0.008202744185993885
+magnetodielectric_composite,truth,eps,0,True,0.0037901098964444714,0.0
+magnetodielectric_composite,truth,mu,0,True,0.04080458075864996,0.0
+magnetodielectric_composite,correct_extraction_noise1e-3,eps,0,True,2.4751886963275944,0.0011887893078898408
+magnetodielectric_composite,correct_extraction_noise1e-3,mu,0,True,1.966306035689002,0.0021866887750453265
+magnetodielectric_composite,correct_extraction_noise1e-3,eps,1,True,2.339266030296246,0.0011020665375726844
+magnetodielectric_composite,correct_extraction_noise1e-3,mu,1,True,2.507133524386378,0.0020499239782671183
+magnetodielectric_composite,correct_extraction_noise1e-3,eps,2,True,2.086831598710237,0.0011199876399323146
+magnetodielectric_composite,correct_extraction_noise1e-3,mu,2,True,2.57911613982218,0.0022588389041118435
+magnetodielectric_composite,correct_extraction_noise1e-3,eps,3,True,2.8896048879092895,0.0011870943104352913
+magnetodielectric_composite,correct_extraction_noise1e-3,mu,3,True,2.842035585905588,0.00237342246384676
+magnetodielectric_composite,correct_extraction_noise1e-3,eps,4,True,2.1814133497505335,0.0011594638180331335
+magnetodielectric_composite,correct_extraction_noise1e-3,mu,4,True,2.2948725848120644,0.002318316604127373
+magnetodielectric_composite,wrong_branch_plus1,eps,0,False,1962.028444205583,6.691604972107265
+magnetodielectric_composite,wrong_branch_plus1,mu,0,False,1457.4858099929907,6.667816901884162
+magnetodielectric_composite,wrong_branch_plus1,eps,1,False,3849.1925918700595,6.675142507009972
+magnetodielectric_composite,wrong_branch_plus1,mu,1,False,1709.5679808971615,6.6874162677066415
+magnetodielectric_composite,wrong_branch_plus1,eps,2,False,7578.4035598494065,6.681494339494814
+magnetodielectric_composite,wrong_branch_plus1,mu,2,False,1799.7482858483486,6.680353751938017
+magnetodielectric_composite,wrong_branch_plus1,eps,3,False,5121.327793723753,6.6651343371480305
+magnetodielectric_composite,wrong_branch_plus1,mu,3,False,1970.1785307159905,6.695551701028094
+magnetodielectric_composite,wrong_branch_plus1,eps,4,False,1019.7402105536728,6.67951800052748
+magnetodielectric_composite,wrong_branch_plus1,mu,4,False,1209.9126556920742,6.680797968259479
+magnetodielectric_composite,thickness_error_1pct,eps,0,True,0.003724937590865368,0.00990099009900991
+magnetodielectric_composite,thickness_error_1pct,mu,0,True,0.04073378340334019,0.009900990099009965
+magnetodielectric_composite,ref_plane_error_50um,eps,0,True,0.0038374656500246725,0.00816997490017854
+magnetodielectric_composite,ref_plane_error_50um,mu,0,False,5.562735296010454,0.02236517931892312
+magnetodielectric_composite,air_gap_10um,eps,0,True,0.0031927857122079095,0.06375789474355001
+magnetodielectric_composite,air_gap_10um,mu,0,True,0.040343812024316306,0.0060709458529460735
+magnetodielectric_composite,holder_mismatch_51ohm,eps,0,True,0.0038659118418136007,0.02000000000000004
+magnetodielectric_composite,holder_mismatch_51ohm,mu,0,True,0.0400045279156574,0.01960784313725496
+magnetic_lorentz,truth,eps,0,True,0.0001529861223471335,0.0
+magnetic_lorentz,truth,mu,0,True,0.07733287334242119,0.0
+magnetic_lorentz,correct_extraction_noise1e-3,eps,0,True,2.39384809550122,0.0011587129154401125
+magnetic_lorentz,correct_extraction_noise1e-3,mu,0,True,1.7952861276156542,0.002174425326793274
+magnetic_lorentz,correct_extraction_noise1e-3,eps,1,True,1.8291513737827463,0.001080165515194303
+magnetic_lorentz,correct_extraction_noise1e-3,mu,1,True,2.6078899797868997,0.002043962817568324
+magnetic_lorentz,correct_extraction_noise1e-3,eps,2,True,2.3988607592491467,0.0010971654753128726
+magnetic_lorentz,correct_extraction_noise1e-3,mu,2,True,2.6285936568988975,0.0022153308651045177
+magnetic_lorentz,correct_extraction_noise1e-3,eps,3,True,3.4344342766510305,0.001156640122201803
+magnetic_lorentz,correct_extraction_noise1e-3,mu,3,True,2.8440621412136777,0.0023104539166169313
+magnetic_lorentz,correct_extraction_noise1e-3,eps,4,True,1.7719118930377622,0.0011263228725601278
+magnetic_lorentz,correct_extraction_noise1e-3,mu,4,True,2.3406114169585774,0.002134686663232029
+magnetic_lorentz,wrong_branch_plus1,eps,0,False,2741.3589738343976,5.6770225483076775
+magnetic_lorentz,wrong_branch_plus1,mu,0,False,1691.8299117921133,5.678481510022439
+magnetic_lorentz,wrong_branch_plus1,eps,1,False,766.1637583686382,5.672223158518055
+magnetic_lorentz,wrong_branch_plus1,mu,1,False,2049.9509308132115,5.673675878972582
+magnetic_lorentz,wrong_branch_plus1,eps,2,False,1792.3162213339322,5.66204619204264
+magnetic_lorentz,wrong_branch_plus1,mu,2,False,2207.6881983318144,5.676685244254086
+magnetic_lorentz,wrong_branch_plus1,eps,3,False,1043.37945111832,5.672373528362965
+magnetic_lorentz,wrong_branch_plus1,mu,3,False,1816.3583537022691,5.675633476815735
+magnetic_lorentz,wrong_branch_plus1,eps,4,False,1094.839277518325,5.6722431229875845
+magnetic_lorentz,wrong_branch_plus1,mu,4,False,1458.1120529762784,5.669259223054864
+magnetic_lorentz,thickness_error_1pct,eps,0,True,0.00014992264497070668,0.009900990099009915
+magnetic_lorentz,thickness_error_1pct,mu,0,True,0.07707856964320994,0.009900990099009918
+magnetic_lorentz,ref_plane_error_50um,eps,0,True,0.0002601606365121377,0.009140277418180196
+magnetic_lorentz,ref_plane_error_50um,mu,0,False,6.442670673665506,0.020545941091751303
+magnetic_lorentz,air_gap_10um,eps,0,True,0.0001279550238666084,0.0778087173732387
+magnetic_lorentz,air_gap_10um,mu,0,True,0.07646015857884557,0.010580364609254793
+magnetic_lorentz,holder_mismatch_51ohm,eps,0,True,0.00015604584501478715,0.020000000000000014
+magnetic_lorentz,holder_mismatch_51ohm,mu,0,True,0.075817529036054,0.01960784313725494
+lowloss_magnetodielectric_thick,truth,eps,0,True,2.7476464777281124e-05,0.0
+lowloss_magnetodielectric_thick,truth,mu,0,True,0.03334684604585876,0.0
+lowloss_magnetodielectric_thick,correct_extraction_noise1e-3,eps,0,True,2.1978129416056986,0.0013342048430590153
+lowloss_magnetodielectric_thick,correct_extraction_noise1e-3,mu,0,True,2.1534224636081287,0.0012678661538881421
+lowloss_magnetodielectric_thick,correct_extraction_noise1e-3,eps,1,True,1.7196361146225108,0.0012149601509205275
+lowloss_magnetodielectric_thick,correct_extraction_noise1e-3,mu,1,True,1.5479399590371392,0.0012436954260781382
+lowloss_magnetodielectric_thick,correct_extraction_noise1e-3,eps,2,False,6.526712425550699,0.0013408876866928706
+lowloss_magnetodielectric_thick,correct_extraction_noise1e-3,mu,2,False,5.1627136010828965,0.0013687023563438482
+lowloss_magnetodielectric_thick,correct_extraction_noise1e-3,eps,3,True,2.2539602670463292,0.0013100389179942365
+lowloss_magnetodielectric_thick,correct_extraction_noise1e-3,mu,3,True,2.1930519951184797,0.0012725187079118197
+lowloss_magnetodielectric_thick,correct_extraction_noise1e-3,eps,4,True,2.306644861241553,0.0013849792922500477
+lowloss_magnetodielectric_thick,correct_extraction_noise1e-3,mu,4,True,2.259801860958529,0.001355876226127817
+lowloss_magnetodielectric_thick,wrong_branch_plus1,eps,0,False,1171.5013984015118,0.9782606265145133
+lowloss_magnetodielectric_thick,wrong_branch_plus1,mu,0,False,967.8133250032053,0.9653218405237226
+lowloss_magnetodielectric_thick,wrong_branch_plus1,eps,1,False,744.957044321701,0.9706972566899198
+lowloss_magnetodielectric_thick,wrong_branch_plus1,mu,1,False,591.247288917599,0.9756298377284016
+lowloss_magnetodielectric_thick,wrong_branch_plus1,eps,2,False,3371.201437858761,0.9733905869951485
+lowloss_magnetodielectric_thick,wrong_branch_plus1,mu,2,False,2528.5403831629633,0.9762926797722157
+lowloss_magnetodielectric_thick,wrong_branch_plus1,eps,3,False,1300.2839749754178,0.9702498518009607
+lowloss_magnetodielectric_thick,wrong_branch_plus1,mu,3,False,1165.6329010031352,0.9764117379464318
+lowloss_magnetodielectric_thick,wrong_branch_plus1,eps,4,False,558.5257781145037,0.9698988964240689
+lowloss_magnetodielectric_thick,wrong_branch_plus1,mu,4,False,497.7778996831148,0.9808377213511634
+lowloss_magnetodielectric_thick,thickness_error_1pct,eps,0,True,2.6647886882860697e-05,0.00990099009900983
+lowloss_magnetodielectric_thick,thickness_error_1pct,mu,0,True,0.03186411436732079,0.009900990099009875
+lowloss_magnetodielectric_thick,ref_plane_error_50um,eps,0,True,0.20253845484726243,0.007736894745671517
+lowloss_magnetodielectric_thick,ref_plane_error_50um,mu,0,True,0.2533127268756852,0.007799335949933452
+lowloss_magnetodielectric_thick,air_gap_10um,eps,0,True,2.425389585083039e-05,0.054417623179787294
+lowloss_magnetodielectric_thick,air_gap_10um,mu,0,True,0.03297027362546133,0.004052393364055148
+lowloss_magnetodielectric_thick,holder_mismatch_51ohm,eps,0,True,2.8025993401094495e-05,0.02000000000000002
+lowloss_magnetodielectric_thick,holder_mismatch_51ohm,mu,0,True,0.03269298730614709,0.01960784313725495
+synthetic,noncausal_mixed_models (sigma=0.01|eps'|),eps,0,False,175.2884592316436,
+synthetic,noncausal_mixed_models (sigma=0.001|eps'|),eps,0,False,1415.9405199284442,
+synthetic,active_conjugate (sigma=0.01|eps'|),eps,0,False,4026.058294881085,
+synthetic,active_conjugate (sigma=0.001|eps'|),eps,0,False,4417.326971168737,
+synthetic,constant_complex_4-0.4j (sigma=0.01|eps'|),eps,0,True,0.9943191724923588,
+synthetic,constant_complex_4-0.4j (sigma=0.001|eps'|),eps,0,False,9.94319172492351,
+synthetic,real_part_plus_0.3(f/18GHz)^2 (sigma=0.01|eps'|),eps,0,True,0.24365243967760825,
+synthetic,real_part_plus_0.3(f/18GHz)^2 (sigma=0.001|eps'|),eps,0,True,0.2413234865884464,
+synthetic,real_part_minus_0.3(f/18GHz)^2 (sigma=0.01|eps'|),eps,0,False,35.48288286602862,
+synthetic,real_part_minus_0.3(f/18GHz)^2 (sigma=0.001|eps'|),eps,0,False,65.29949513707234,
+synthetic,real_part_offset_+0.5 (sigma=0.01|eps'|),eps,0,True,0.24365457884109973,
+synthetic,real_part_offset_+0.5 (sigma=0.001|eps'|),eps,0,True,0.24113978208918346,

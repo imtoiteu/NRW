@@ -54,6 +54,7 @@ def main():
     ap.add_argument("--only", default=None, help="comma-separated algorithm names")
     ap.add_argument("--debug", action="store_true")
     ap.add_argument("--jobs", type=int, default=4)
+    ap.add_argument("--fresh", action="store_true", help="ignore saved per-algorithm parts")
     args = ap.parse_args()
     OUT.mkdir(parents=True, exist_ok=True)
     ap_jobs = args.jobs
@@ -67,14 +68,25 @@ def main():
         keep = set(args.only.split(","))
         jobs = [j for j in jobs if j[0] in keep]
     algs = [j[0] for j in jobs]
-    rows = []
+    parts = OUT / "parts"
+    parts.mkdir(parents=True, exist_ok=True)
+    tag = "quick" if args.quick else f"full_s{args.seeds}"
+
+    def part(alg):
+        return parts / f"{tag}__{alg.replace(':', '_')}.csv"
+
+    todo = [j for j in jobs if args.fresh or not part(j[0]).exists()]
+    print(f"{len(jobs) - len(todo)} algorithms already done (resume); running {len(todo)}", flush=True)
     from concurrent.futures import ProcessPoolExecutor, as_completed
     with ProcessPoolExecutor(max_workers=ap_jobs) as ex:
-        futs = [ex.submit(_worker, j) for j in jobs]
+        futs = [ex.submit(_worker, j) for j in todo]
         for fu in as_completed(futs):
             alg, r = fu.result()
-            rows += r
+            pd.DataFrame(r).to_csv(part(alg), index=False)  # incremental: survives interruption
             print(f"{alg:28s} done ({len(r)} runs)", flush=True)
+    rows = []
+    for j in jobs:
+        rows += pd.read_csv(part(j[0])).to_dict("records")
     df = pd.DataFrame(rows)
     df.to_csv(OUT / "raw.csv", index=False)
 

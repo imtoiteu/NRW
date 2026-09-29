@@ -283,3 +283,28 @@ pp. 1093–1096, 2006. DOI: 10.1109/MIKON.2006.4345376. *Verification:* META (Cr
 * Weir's and Nicolson–Ross's original full texts, the Baker-Jarvis 1990 journal paper and the
   Boughriet 1997 paper were not accessible; all equations attributed to them are quoted from the
   NIST reproductions [R4], [R6], [R7] and labelled as such.
+
+## Statistical and numerical methods used by this project (added by the implementer)
+
+**[R40]** S. M. Kay, *Fundamentals of Statistical Signal Processing, Vol. I: Estimation Theory*.
+Upper Saddle River, NJ: Prentice Hall, 1993, ch. 3 (Cramér–Rao lower bound; Fisher information
+for complex Gaussian data). Standard textbook; cited for the CRLB used in `nrw.conditioning`.
+Not re-read for this project; no DOI (book).
+
+**[R41]** C. L. Lawson and R. J. Hanson, *Solving Least Squares Problems*. Philadelphia: SIAM,
+1995 (reprint of the 1974 edition), ch. 23 (NNLS algorithm). DOI: 10.1137/1.9781611971217.
+Verified via Crossref 2026-09-29. Used through `scipy.optimize.nnls` in `nrw.kk`.
+
+**[R42]** J. J. Moré, "The Levenberg-Marquardt algorithm: Implementation and theory," in
+*Numerical Analysis*, Lecture Notes in Mathematics, vol. 630, pp. 105–116, Springer, 1978.
+DOI: 10.1007/BFb0067700. Verified via Crossref 2026-09-29. Damped Gauss–Newton used in
+`nrw.iterative.complex_lm`.
+
+**[R43]** O. J. Dunn, "Multiple comparisons among means," *J. Amer. Statist. Assoc.*, vol. 56,
+no. 293, pp. 52–64, 1961. DOI: 10.1080/01621459.1961.10482090. Verified via Crossref
+2026-09-29. Bonferroni family-wise threshold of the KK diagnostic.
+
+**[R44]** A. J. Viterbi, "Error bounds for convolutional codes and an asymptotically optimum
+decoding algorithm," *IEEE Trans. Inf. Theory*, vol. 13, no. 2, pp. 260–269, 1967.
+DOI: 10.1109/TIT.1967.1054010. Verified via Crossref 2026-09-29. Dynamic-programming
+branch tracker in `nrw.branch.dynamic_programming`.

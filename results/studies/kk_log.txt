@@ -1,0 +1,74 @@
+debye_dielectric
+lorentz_dielectric
+magnetodielectric_composite
+magnetic_lorentz
+lowloss_magnetodielectric_thick
+                           case                                            variant quantity  pass_rate  median_max_norm_residual  median_rel_error_of_input  n
+               debye_dielectric                                       air_gap_10um      eps        1.0                  0.014311                   0.047878  1
+               debye_dielectric                       correct_extraction_noise1e-3      eps        1.0                  2.460825                   0.001068  5
+               debye_dielectric                              holder_mismatch_51ohm      eps        0.0                 14.270756                   0.007244  1
+               debye_dielectric                               ref_plane_error_50um      eps        0.0                  6.674389                   0.009073  1
+               debye_dielectric                               thickness_error_1pct      eps        0.0                  4.676557                   0.019709  1
+               debye_dielectric                                              truth      eps        1.0                  0.016455                   0.000000  1
+               debye_dielectric                                 wrong_branch_plus1      eps        0.0              32398.872836                  13.794874  5
+             lorentz_dielectric                                       air_gap_10um      eps        1.0                  0.576879                   0.051408  1
+             lorentz_dielectric                       correct_extraction_noise1e-3      eps        1.0                  2.451762                   0.001059  5
+             lorentz_dielectric                              holder_mismatch_51ohm      eps        0.0                 48.986688                   0.008203  1
+             lorentz_dielectric                               ref_plane_error_50um      eps        0.0                 48.595312                   0.012419  1
+             lorentz_dielectric                               thickness_error_1pct      eps        0.0                 23.663040                   0.017962  1
+             lorentz_dielectric                                              truth      eps        1.0                  0.591569                   0.000000  1
+             lorentz_dielectric                                 wrong_branch_plus1      eps        0.0             124348.999281                  19.136692  5
+lowloss_magnetodielectric_thick                                       air_gap_10um      eps        1.0                  0.000024                   0.054418  1
+lowloss_magnetodielectric_thick                                       air_gap_10um       mu        1.0                  0.032970                   0.004052  1
+lowloss_magnetodielectric_thick                       correct_extraction_noise1e-3      eps        0.8                  2.253960                   0.001334  5
+lowloss_magnetodielectric_thick                       correct_extraction_noise1e-3       mu        0.8                  2.193052                   0.001273  5
+lowloss_magnetodielectric_thick                              holder_mismatch_51ohm      eps        1.0                  0.000028                   0.020000  1
+lowloss_magnetodielectric_thick                              holder_mismatch_51ohm       mu        1.0                  0.032693                   0.019608  1
+lowloss_magnetodielectric_thick                               ref_plane_error_50um      eps        1.0                  0.202538                   0.007737  1
+lowloss_magnetodielectric_thick                               ref_plane_error_50um       mu        1.0                  0.253313                   0.007799  1
+lowloss_magnetodielectric_thick                               thickness_error_1pct      eps        1.0                  0.000027                   0.009901  1
+lowloss_magnetodielectric_thick                               thickness_error_1pct       mu        1.0                  0.031864                   0.009901  1
+lowloss_magnetodielectric_thick                                              truth      eps        1.0                  0.000027                   0.000000  1
+lowloss_magnetodielectric_thick                                              truth       mu        1.0                  0.033347                   0.000000  1
+lowloss_magnetodielectric_thick                                 wrong_branch_plus1      eps        0.0               1171.501398                   0.970697  5
+lowloss_magnetodielectric_thick                                 wrong_branch_plus1       mu        0.0                967.813325                   0.976293  5
+               magnetic_lorentz                                       air_gap_10um      eps        1.0                  0.000128                   0.077809  1
+               magnetic_lorentz                                       air_gap_10um       mu        1.0                  0.076460                   0.010580  1
+               magnetic_lorentz                       correct_extraction_noise1e-3      eps        1.0                  2.393848                   0.001126  5
+               magnetic_lorentz                       correct_extraction_noise1e-3       mu        1.0                  2.607890                   0.002174  5
+               magnetic_lorentz                              holder_mismatch_51ohm      eps        1.0                  0.000156                   0.020000  1
+               magnetic_lorentz                              holder_mismatch_51ohm       mu        1.0                  0.075818                   0.019608  1
+               magnetic_lorentz                               ref_plane_error_50um      eps        1.0                  0.000260                   0.009140  1
+               magnetic_lorentz                               ref_plane_error_50um       mu        0.0                  6.442671                   0.020546  1
+               magnetic_lorentz                               thickness_error_1pct      eps        1.0                  0.000150                   0.009901  1
+               magnetic_lorentz                               thickness_error_1pct       mu        1.0                  0.077079                   0.009901  1
+               magnetic_lorentz                                              truth      eps        1.0                  0.000153                   0.000000  1
+               magnetic_lorentz                                              truth       mu        1.0                  0.077333                   0.000000  1
+               magnetic_lorentz                                 wrong_branch_plus1      eps        0.0               1094.839278                   5.672243  5
+               magnetic_lorentz                                 wrong_branch_plus1       mu        0.0               1816.358354                   5.675633  5
+    magnetodielectric_composite                                       air_gap_10um      eps        1.0                  0.003193                   0.063758  1
+    magnetodielectric_composite                                       air_gap_10um       mu        1.0                  0.040344                   0.006071  1
+    magnetodielectric_composite                       correct_extraction_noise1e-3      eps        1.0                  2.339266                   0.001159  5
+    magnetodielectric_composite                       correct_extraction_noise1e-3       mu        1.0                  2.507134                   0.002259  5
+    magnetodielectric_composite                              holder_mismatch_51ohm      eps        1.0                  0.003866                   0.020000  1
+    magnetodielectric_composite                              holder_mismatch_51ohm       mu        1.0                  0.040005                   0.019608  1
+    magnetodielectric_composite                               ref_plane_error_50um      eps        1.0                  0.003837                   0.008170  1
+    magnetodielectric_composite                               ref_plane_error_50um       mu        0.0                  5.562735                   0.022365  1
+    magnetodielectric_composite                               thickness_error_1pct      eps        1.0                  0.003725                   0.009901  1
+    magnetodielectric_composite                               thickness_error_1pct       mu        1.0                  0.040734                   0.009901  1
+    magnetodielectric_composite                                              truth      eps        1.0                  0.003790                   0.000000  1
+    magnetodielectric_composite                                              truth       mu        1.0                  0.040805                   0.000000  1
+    magnetodielectric_composite                                 wrong_branch_plus1      eps        0.0               3849.192592                   6.679518  5
+    magnetodielectric_composite                                 wrong_branch_plus1       mu        0.0               1709.567981                   6.680798  5
+                      synthetic               active_conjugate (sigma=0.001|eps'|)      eps        0.0               4417.326971                        NaN  1
+                      synthetic                active_conjugate (sigma=0.01|eps'|)      eps        0.0               4026.058295                        NaN  1
+                      synthetic        constant_complex_4-0.4j (sigma=0.001|eps'|)      eps        0.0                  9.943192                        NaN  1
+                      synthetic         constant_complex_4-0.4j (sigma=0.01|eps'|)      eps        1.0                  0.994319                        NaN  1
+                      synthetic         noncausal_mixed_models (sigma=0.001|eps'|)      eps        0.0               1415.940520                        NaN  1
+                      synthetic          noncausal_mixed_models (sigma=0.01|eps'|)      eps        0.0                175.288459                        NaN  1
+                      synthetic real_part_minus_0.3(f/18GHz)^2 (sigma=0.001|eps'|)      eps        0.0                 65.299495                        NaN  1
+                      synthetic  real_part_minus_0.3(f/18GHz)^2 (sigma=0.01|eps'|)      eps        0.0                 35.482883                        NaN  1
+                      synthetic          real_part_offset_+0.5 (sigma=0.001|eps'|)      eps        1.0                  0.241140                        NaN  1
+                      synthetic           real_part_offset_+0.5 (sigma=0.01|eps'|)      eps        1.0                  0.243655                        NaN  1
+                      synthetic  real_part_plus_0.3(f/18GHz)^2 (sigma=0.001|eps'|)      eps        1.0                  0.241323                        NaN  1
+                      synthetic   real_part_plus_0.3(f/18GHz)^2 (sigma=0.01|eps'|)      eps        1.0                  0.243652                        NaN  1

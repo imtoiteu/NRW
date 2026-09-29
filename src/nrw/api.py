@@ -357,7 +357,7 @@ def extract_material_parameters(frequency, s11, s21, thickness, s12=None, s22=No
     eps_sig = unc["eps_loss"]["sigma_percentile"] if unc else None
     mu_sig = unc["mu_loss"]["sigma_percentile"] if unc else None
     phys = run_all(f, s11, s21, s12, s22, eps, mu, base.propagation_constant, base.impedance,
-                   eps_sig, mu_sig, eps_mu_fixed=eps_only)
+                   eps_sig, mu_sig, eps_mu_fixed=eps_only, noise_sigma=noise_sigma, length_m=L)
 
     caus = {}
     if kk:
@@ -508,7 +508,8 @@ def extract_multi_thickness(frequency, measurements, geometry="coax", branch_met
              "not_converged": ~it.converged}
     for i, r in enumerate(singles):
         flags[f"sample{i}_branch_disagreement"] = r.flags["branch_disagreement"]
-    phys = run_all(f, samples[0]["s11"], samples[0]["s21"], samples[0]["s12"], samples[0]["s22"], it.eps, it.mu)
+    phys = run_all(f, samples[0]["s11"], samples[0]["s21"], samples[0]["s12"], samples[0]["s22"], it.eps, it.mu,
+                   noise_sigma=noise_sigma)
     caus = {}
     if kk:
         good = ok & ~flags["singular_region"]

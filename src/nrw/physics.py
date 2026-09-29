@@ -59,8 +59,14 @@ def _tol(x, sigma, k):
     return k * np.asarray(sigma) if sigma is not None else np.full(np.shape(x), 0.0)
 
 
-def check_network(s11, s21, s12=None, s22=None, tol=1e-3):
-    """Checks on the measured two-port itself (before any extraction)."""
+def check_network(s11, s21, s12=None, s22=None, tol=1e-3, noise_sigma=None, k_sigma=3.0):
+    """Checks on the measured two-port itself (before any extraction).
+
+    Measurement noise of rms sigma perturbs |S|^2 by about 2|S| sigma, so for noisy data a
+    violation is declared only beyond max(tol, 2 k_sigma sigma).
+    """
+    if noise_sigma is not None:
+        tol = max(tol, 2 * k_sigma * noise_sigma)
     s11 = np.asarray(s11, complex)
     s21 = np.asarray(s21, complex)
     s12 = s21 if s12 is None else np.asarray(s12, complex)
@@ -72,7 +78,7 @@ def check_network(s11, s21, s12=None, s22=None, tol=1e-3):
     recip = np.abs(s21 - s12) / np.maximum(np.abs(s21), 1e-12)
     sym = np.abs(s11 - s22) / np.maximum(np.abs(s11), np.abs(s22)).clip(1e-12)
     return [
-        Check("network_passivity", "exact", "largest singular value of S <= 1 (+tol)", smax > 1 + tol, smax),
+        Check("network_passivity", "exact", f"largest singular value of S <= 1 + {tol:.2g}", smax > 1 + tol, smax),
         Check("absorbed_power_port1", "exact", "1 - |S11|^2 - |S21|^2 >= -tol", absorbed < -tol, absorbed),
         Check("reciprocity", "assumption", "|S21 - S12|/|S21| <= 5 % (linear, non-gyrotropic sample; stable VNA)",
               recip > 0.05, recip),
@@ -82,7 +88,7 @@ def check_network(s11, s21, s12=None, s22=None, tol=1e-3):
 
 
 def check_material(eps, mu, gamma=None, z=None, eps_sigma=None, mu_sigma=None, k_sigma=2.0,
-                   eps_mu_fixed=False, n_max=50.0):
+                   eps_mu_fixed=False, n_max=50.0, alpha_tol=None):
     """Checks on extracted parameters.
 
     eps_sigma / mu_sigma: per-frequency standard uncertainty of eps'' / mu'' (if known);
@@ -100,7 +106,9 @@ def check_material(eps, mu, gamma=None, z=None, eps_sigma=None, mu_sigma=None, k
         out.append(Check("mu_passivity", "exact", "mu'' >= 0, within k*sigma", mpp < -_tol(mpp, mu_sigma, k_sigma), mpp))
     if gamma is not None:
         g = np.asarray(gamma)
-        out.append(Check("attenuation_nonnegative", "exact", "Re(gamma) >= 0 (|T| <= 1)", g.real < 0, g.real))
+        tol_a = 0.0 if alpha_tol is None else np.asarray(alpha_tol)
+        out.append(Check("attenuation_nonnegative", "exact", "Re(gamma) >= 0 (|T| <= 1), beyond noise",
+                         g.real < -tol_a, g.real))
     if z is not None:
         zz = np.asarray(z)
         out.append(Check("impedance_real_part", "exact", "Re(z) >= 0 (|Gamma| <= 1)", zz.real < 0, zz.real))
@@ -132,10 +140,17 @@ def continuity_check(f, x, name, k=8.0):
 
 
 def run_all(f, s11, s21, s12, s22, eps, mu, gamma=None, z=None, eps_sigma=None, mu_sigma=None,
-            eps_mu_fixed=False):
+            eps_mu_fixed=False, noise_sigma=None, length_m=None):
+    """All checks. With ``noise_sigma`` (and ``length_m``), exact checks on measured quantities
+    tolerate deviations up to 3 sigma of the measurement noise: |S|^2 by 6 sigma and the
+    attenuation by 3 sigma / (|S21| L) (since d ln|T| ~ d|S21| / |S21|)."""
     rep = PhysicsReport()
-    rep.checks += check_network(s11, s21, s12, s22)
-    rep.checks += check_material(eps, mu, gamma, z, eps_sigma, mu_sigma, eps_mu_fixed=eps_mu_fixed)
+    rep.checks += check_network(s11, s21, s12, s22, noise_sigma=noise_sigma)
+    alpha_tol = None
+    if noise_sigma is not None and length_m:
+        alpha_tol = 3 * noise_sigma / (np.maximum(np.abs(np.asarray(s21)), 1e-12) * length_m)
+    rep.checks += check_material(eps, mu, gamma, z, eps_sigma, mu_sigma, eps_mu_fixed=eps_mu_fixed,
+                                 alpha_tol=alpha_tol)
     rep.checks.append(continuity_check(f, eps, "eps"))
     if not eps_mu_fixed:
         rep.checks.append(continuity_check(f, mu, "mu"))

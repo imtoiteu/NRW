@@ -111,3 +111,15 @@ def test_kk_false_alarm_rate_is_controlled(band):
         v = m(band) + sig * rng.standard_normal(len(band)) - 1j * sig * rng.standard_normal(len(band))
         passes += kk_consistency(band, v, sigma=np.full(len(band), sig)).passed
     assert passes >= 9
+
+
+def test_network_check_tolerates_noise_but_not_gain(coax, band):
+    from nrw.perturb import complex_gaussian
+    s = make(band, 4 - 1e-4j, 1, 10e-3, coax)  # almost lossless: |S11|^2+|S21|^2 ~ 1
+    noisy = [complex_gaussian(x, 1e-3, np.random.default_rng(0)) for x in s]
+    strict = {c.name: c for c in check_network(*noisy)}
+    aware = {c.name: c for c in check_network(*noisy, noise_sigma=1e-3)}
+    assert strict["network_passivity"].n_violations > 0  # noise alone trips a fixed 1e-3 tolerance
+    assert aware["network_passivity"].n_violations == 0
+    gain = {c.name: c for c in check_network(s[0] * 1.05, s[1] * 1.05, s[2], s[3], noise_sigma=1e-3)}
+    assert gain["network_passivity"].n_violations > 0  # a real 5 % gain is still caught
