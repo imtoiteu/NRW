@@ -1,0 +1,186 @@
+{
+  "method": "iterative_eps_mu",
+  "branch_method": "anchored",
+  "n_frequencies": 801,
+  "f_min_hz": 2000000000.0,
+  "f_max_hz": 18000000000.0,
+  "branch_range": [
+    0,
+    0
+  ],
+  "flag_counts": {
+    "gamma_root_ambiguous": 0,
+    "gamma_outside_unit_circle": 0,
+    "s11_below_noise": 0,
+    "near_half_wavelength": 0,
+    "s21_below_noise": 0,
+    "nonfinite": 0,
+    "blowup": 0,
+    "T_gain": 0,
+    "singular_region": 0,
+    "branch_ambiguous": 0,
+    "branch_unreliable_step": 0,
+    "not_converged": 0,
+    "alternative_minimum": 0,
+    "mc_branch_unstable": 0
+  },
+  "convergence": {
+    "converged": 801,
+    "n_iterations": null,
+    "residual_rms": null,
+    "jacobian_cond": null,
+    "alternative_minimum": 0
+  },
+  "physics": {
+    "network_passivity": {
+      "name": "network_passivity",
+      "status": "exact",
+      "description": "largest singular value of S <= 1 (+tol)",
+      "n_violations": 0
+    },
+    "absorbed_power_port1": {
+      "name": "absorbed_power_port1",
+      "status": "exact",
+      "description": "1 - |S11|^2 - |S21|^2 >= -tol",
+      "n_violations": 0
+    },
+    "reciprocity": {
+      "name": "reciprocity",
+      "status": "assumption",
+      "description": "|S21 - S12|/|S21| <= 5 % (linear, non-gyrotropic sample; stable VNA)",
+      "n_violations": 0
+    },
+    "port_symmetry": {
+      "name": "port_symmetry",
+      "status": "assumption",
+      "description": "|S11 - S22|/max|S11|,|S22| <= 20 % (homogeneous sample, symmetric planes)",
+      "n_violations": 0
+    },
+    "eps_passivity": {
+      "name": "eps_passivity",
+      "status": "exact",
+      "description": "eps'' >= 0 (exp(+jwt) convention), within k*sigma",
+      "n_violations": 0
+    },
+    "mu_passivity": {
+      "name": "mu_passivity",
+      "status": "exact",
+      "description": "mu'' >= 0, within k*sigma",
+      "n_violations": 0
+    },
+    "attenuation_nonnegative": {
+      "name": "attenuation_nonnegative",
+      "status": "exact",
+      "description": "Re(gamma) >= 0 (|T| <= 1)",
+      "n_violations": 0
+    },
+    "impedance_real_part": {
+      "name": "impedance_real_part",
+      "status": "exact",
+      "description": "Re(z) >= 0 (|Gamma| <= 1)",
+      "n_violations": 0
+    },
+    "finite": {
+      "name": "finite",
+      "status": "exact",
+      "description": "eps and mu finite",
+      "n_violations": 0
+    },
+    "refractive_index_plausible": {
+      "name": "refractive_index_plausible",
+      "status": "heuristic",
+      "description": "|n| <= 50.0",
+      "n_violations": 0
+    },
+    "eps_real_ge_1": {
+      "name": "eps_real_ge_1",
+      "status": "heuristic",
+      "description": "eps' >= 1 (violated legitimately above resonances/plasmas)",
+      "n_violations": 0
+    },
+    "mu_real_positive": {
+      "name": "mu_real_positive",
+      "status": "heuristic",
+      "description": "mu' > 0 (violated legitimately above FMR)",
+      "n_violations": 0
+    },
+    "eps_continuity": {
+      "name": "eps_continuity",
+      "status": "heuristic",
+      "description": "|delta eps| <= 8 x robust step scale",
+      "n_violations": 0
+    },
+    "mu_continuity": {
+      "name": "mu_continuity",
+      "status": "heuristic",
+      "description": "|delta mu| <= 8 x robust step scale",
+      "n_violations": 0
+    }
+  },
+  "causality": {
+    "eps": {
+      "passed": true,
+      "statement": "KK consistency diagnostic passed within the available bandwidth and assumptions: Re(eps) is reproduced from Im(eps) by a finite-band subtractive KK relation plus a passive out-of-band continuation, to within 3 standard uncertainties. This does NOT establish that the material strictly satisfies the global Kramers-Kronig relations.",
+      "assumptions": [
+        "band limited to 2-18 GHz; out-of-band behaviour unknown",
+        "out-of-band loss assumed passive (non-negative), continuous at the band edges and piecewise-linear on 24 log-spaced nodes within x100 of the band edges",
+        "eps'' interpolated piecewise-linearly between measured points",
+        "singly-subtractive form anchored at 10 GHz (removes the unknown eps_inf)",
+        "uncertainty: supplied sigma",
+        "pass threshold: max |residual|/sigma <= 3"
+      ],
+      "max_abs_normalized_residual": 0.9226456412911785
+    },
+    "mu": {
+      "passed": true,
+      "statement": "KK consistency diagnostic passed within the available bandwidth and assumptions: Re(mu) is reproduced from Im(mu) by a finite-band subtractive KK relation plus a passive out-of-band continuation, to within 3 standard uncertainties. This does NOT establish that the material strictly satisfies the global Kramers-Kronig relations.",
+      "assumptions": [
+        "band limited to 2-18 GHz; out-of-band behaviour unknown",
+        "out-of-band loss assumed passive (non-negative), continuous at the band edges and piecewise-linear on 24 log-spaced nodes within x100 of the band edges",
+        "mu'' interpolated piecewise-linearly between measured points",
+        "singly-subtractive form anchored at 10 GHz (removes the unknown mu_inf)",
+        "uncertainty: supplied sigma",
+        "pass threshold: max |residual|/sigma <= 3"
+      ],
+      "max_abs_normalized_residual": 0.8745858980483301
+    }
+  },
+  "warnings": [
+    "the filled line can support TE11 above ~3.96 GHz (eps*mu ~ 23); it is excited only by sample asymmetry/eccentricity or gaps, but resonant artefacts there invalidate the TEM model"
+  ],
+  "metadata": {
+    "nrw_version": "0.1.0",
+    "thickness_m": 0.002,
+    "geometry": {
+      "kind": "coax",
+      "inner_diameter_m": 0.00304,
+      "outer_diameter_m": 0.007
+    },
+    "reference_plane_offsets_m": [
+      0.0,
+      0.0
+    ],
+    "holder_length_m": null,
+    "noise_sigma": 0.001,
+    "noise_floor": 0.003,
+    "average_ports": true,
+    "regularization": null,
+    "conventions": "exp(+jwt); eps = eps' - j eps''; passive => eps'', mu'' >= 0",
+    "input_file": "data/synthetic/synthetic_magnetic_composite_2mm.s2p",
+    "touchstone_z0_ohm": 50.0
+  },
+  "uncertainty": {
+    "spec": {
+      "s11_mag_rel": 0.005,
+      "s11_phase_deg": 0.5,
+      "s21_mag_rel": 0.005,
+      "s21_phase_deg": 0.5,
+      "s_noise": 0.0,
+      "thickness_m": 4.9999999999999996e-06,
+      "ref_plane_m": 4.9999999999999996e-06,
+      "n_draws": 100,
+      "seed": 12345
+    },
+    "n_failed_draws": 0
+  }
+}

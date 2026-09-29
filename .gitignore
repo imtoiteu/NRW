@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+# Third-party code is cloned here by scripts/fetch_external.sh and is NOT
+# redistributed with this repository (licensing); commit hashes are pinned in
+# research/external_pins.csv.
+research/external/*
+!research/external/README.md
