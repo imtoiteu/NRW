@@ -37,6 +37,16 @@
     "description": "Low-loss magnetic sample, 20 mm: simultaneous eps/mu ill-conditioned near beta L = k pi",
     "eps_model": "(4-0.004j)",
     "mu_model": "(1.5-0.003j)",
-    "synthetic": true
+    "synthetic": true,
+    "pair_with": "synthetic_lowloss_magnetic_13mm_halfwave.s2p"
+  },
+  "synthetic_lowloss_magnetic_13mm_halfwave.s2p": {
+    "thickness_mm": 13.0,
+    "geometry": "coax",
+    "description": "Same low-loss magnetic material, 13 mm: second sample for the two-thickness joint solution",
+    "eps_model": "(4-0.004j)",
+    "mu_model": "(1.5-0.003j)",
+    "synthetic": true,
+    "pair_with": "synthetic_lowloss_magnetic_20mm_halfwave.s2p"
   }
 }

@@ -33,7 +33,13 @@ cases = {
     "synthetic_lowloss_magnetic_20mm_halfwave": (
         4.0 - 0.004j, 1.5 - 0.003j, 20.0e-3,
         "Low-loss magnetic sample, 20 mm: simultaneous eps/mu ill-conditioned near beta L = k pi"),
+    # second thickness of the SAME material (appended last so earlier files keep their noise draws)
+    "synthetic_lowloss_magnetic_13mm_halfwave": (
+        4.0 - 0.004j, 1.5 - 0.003j, 13.0e-3,
+        "Same low-loss magnetic material, 13 mm: second sample for the two-thickness joint solution"),
 }
+PAIRS = {"synthetic_lowloss_magnetic_20mm_halfwave.s2p": "synthetic_lowloss_magnetic_13mm_halfwave.s2p",
+         "synthetic_lowloss_magnetic_13mm_halfwave.s2p": "synthetic_lowloss_magnetic_20mm_halfwave.s2p"}
 manifest = {}
 for name, (eps, mu, L, desc) in cases.items():
     spec = SampleSpec(eps=eps, mu=mu, length_m=L, geometry=Coax())
@@ -57,5 +63,7 @@ for name, (eps, mu, L, desc) in cases.items():
         (OUT / f"{name}.csv").write_text("\n".join(rows) + "\n")
         manifest[f"{name}.csv"] = dict(manifest[f"{name}.s2p"], description=desc + " (CSV, dB/phase format)")
         print("wrote", OUT / f"{name}.csv")
+for a, b in PAIRS.items():
+    manifest[a]["pair_with"] = b  # same material, different thickness (two-thickness demo)
 (OUT / "manifest.json").write_text(json.dumps(manifest, indent=2))
 print("wrote", OUT / "manifest.json")

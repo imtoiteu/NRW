@@ -66,6 +66,8 @@ class ExtractionResult:
     warnings: list = field(default_factory=list)
     metadata: dict = field(default_factory=dict)
     nrw_baseline: object = None  # nrw.classical.NRWResult
+    # multi-thickness extraction only: the single-sample results used for initialisation
+    sample_results: list | None = None
 
     # --- convenience views --------------------------------------------------------
     @property
@@ -454,46 +456,76 @@ def extract_material_parameters(frequency, s11, s21, thickness, s12=None, s22=No
 
 
 def extract_multi_thickness(frequency, measurements, geometry="coax", branch_method="anchored", noise_sigma=1e-3,
-                            singular_rel_threshold=0.01, kk=True):
+                            singular_rel_threshold=0.01, kk=True, uncertainty=None, uncertainty_progress=None,
+                            prior_eps_mu=None):
     """Simultaneous (eps, mu) from two or more samples of different length (same material).
 
     measurements: list of dicts {"s11", "s21", optional "s12", "s22", "thickness" (m),
-    optional "reference_plane_offsets"}. Each sample is first processed by the single-sample
-    pipeline (NRW + branch); at every frequency the single-sample solution with the smaller
-    Cramer-Rao std of eps' initialises a joint least-squares fit to all samples
-    (nrw.iterative.solve_eps_mu_multithickness). Identifiability is lost only where all
-    samples are near a half-wavelength condition simultaneously; the joint Cramer-Rao bound
-    (sum of the Fisher informations) is reported and flagged as in the single-sample case.
+    optional "reference_plane_offsets" (d1, d2) in m}, all on the SAME frequency grid
+    ``frequency`` (no interpolation is performed; a mismatch is an error).
+
+    Each sample is first processed by the single-sample pipeline (NRW + branch + (eps, mu)
+    least squares); at every frequency the single-sample solution with the smaller Cramer-Rao
+    std of eps' initialises a joint least-squares fit to all samples
+    (nrw.iterative.solve_eps_mu_multithickness). Identifiability is lost only where all samples
+    are near a half-wavelength condition simultaneously; the joint Cramer-Rao bound (sum of
+    the Fisher informations) is reported and flagged as in the single-sample case.
+
+    ``samples_inconsistent`` flags frequencies where the joint fit residual exceeds 3x
+    ``noise_sigma``: one (eps, mu) does not explain all samples (different materials, wrong
+    thickness or reference planes).
+
+    Flags combine the samples conservatively for the branch (a frequency is flagged if ANY
+    sample's branch trackers disagree or its branch margin is weak) and optimistically for
+    the transmission floor (flagged only if |S21| is at the noise floor for ALL samples, because
+    one sample with usable transmission carries the information). Per-sample flags are kept as
+    ``sample<i>_<flag>``; the single-sample results are returned in ``sample_results``.
+
+    uncertainty: None, True (default spec) or UncertaintySpec - Monte Carlo in which every
+    sample is perturbed independently (nrw.uncertainty.monte_carlo_multi).
     """
     from .conditioning import real_jacobian
     from .iterative import solve_eps_mu_multithickness
+    from .uncertainty import monte_carlo_multi
 
     if len(measurements) < 2:
         raise InputError("extract_multi_thickness needs at least two measurements")
     Ls = [float(m["thickness"]) for m in measurements]
+    if any(not (np.isfinite(L) and L > 0) for L in Ls):
+        raise InputError("all thicknesses must be positive")
     if len(set(Ls)) < len(Ls):
         raise InputError("sample lengths must differ")
-    singles = [extract_material_parameters(frequency, m["s11"], m["s21"], m["thickness"], s12=m.get("s12"),
-                                           s22=m.get("s22"), geometry=geometry, method="iterative_eps_mu",
-                                           branch_method=branch_method, noise_sigma=noise_sigma,
-                                           reference_plane_offsets=m.get("reference_plane_offsets", (0.0, 0.0)),
-                                           multistart=False, kk=False)
-               for m in measurements]
-    f = singles[0].frequency
-    geom = geometry_from_dict({"kind": geometry} if isinstance(geometry, str) else geometry)
-    stds = np.stack([np.where(np.isfinite(r.identifiability["eps_real_std"]), r.identifiability["eps_real_std"],
-                              np.inf) for r in singles])
-    pick = np.argmin(stds, axis=0)
-    e0 = np.choose(pick, [r.epsilon_complex for r in singles])
-    u0 = np.choose(pick, [r.mu_complex for r in singles])
-    samples = []
-    for m, r in zip(measurements, singles):
-        d1, d2 = m.get("reference_plane_offsets", (0.0, 0.0))
-        samples.append({"s11": np.asarray(m["s11"], complex), "s21": np.asarray(m["s21"], complex),
-                        "s12": None if m.get("s12") is None else np.asarray(m["s12"], complex),
-                        "s22": None if m.get("s22") is None else np.asarray(m["s22"], complex),
-                        "length_m": float(m["thickness"]), "d1": d1, "d2": d2})
-    it = solve_eps_mu_multithickness(f, samples, geom, e0, u0)
+    f_in = np.asarray(frequency, float)
+    for i, m in enumerate(measurements):
+        for k in ("s11", "s21", "s12", "s22"):
+            if m.get(k) is not None and np.shape(m[k]) != f_in.shape:
+                raise InputError(f"sample {i + 1}: {k} has shape {np.shape(m[k])}, expected {f_in.shape} "
+                                 "(all samples must share one frequency grid)")
+
+    def _joint(meas, with_kk, mc_progress=None):
+        singles = [extract_material_parameters(
+            f_in, m["s11"], m["s21"], m["thickness"], s12=m.get("s12"), s22=m.get("s22"), geometry=geometry,
+            method="iterative_eps_mu", branch_method=branch_method, noise_sigma=noise_sigma,
+            reference_plane_offsets=m.get("reference_plane_offsets", (0.0, 0.0)), multistart=False, kk=False,
+            prior_eps_mu=prior_eps_mu, singular_rel_threshold=singular_rel_threshold) for m in meas]
+        f = singles[0].frequency
+        geom = geometry_from_dict({"kind": geometry} if isinstance(geometry, str) else geometry)
+        stds = np.stack([np.where(np.isfinite(r.identifiability["eps_real_std"]), r.identifiability["eps_real_std"],
+                                  np.inf) for r in singles])
+        pick = np.argmin(stds, axis=0)
+        e0 = np.choose(pick, [r.epsilon_complex for r in singles])
+        u0 = np.choose(pick, [r.mu_complex for r in singles])
+        samples = []
+        for m in meas:
+            d1, d2 = m.get("reference_plane_offsets", (0.0, 0.0))
+            samples.append({"s11": np.asarray(m["s11"], complex), "s21": np.asarray(m["s21"], complex),
+                            "s12": None if m.get("s12") is None else np.asarray(m["s12"], complex),
+                            "s22": None if m.get("s22") is None else np.asarray(m["s22"], complex),
+                            "length_m": float(m["thickness"]), "d1": d1, "d2": d2})
+        it = solve_eps_mu_multithickness(f, samples, geom, e0, u0)
+        return f, geom, singles, samples, it
+
+    f, geom, singles, samples, it = _joint(measurements, kk)
     F = np.zeros((len(f), 4, 4))
     ok = np.isfinite(it.eps) & np.isfinite(it.mu)
     for smp in samples:  # Fisher information adds over independent samples
@@ -506,23 +538,72 @@ def extract_multi_thickness(frequency, measurements, geometry="coax", branch_met
                 std[k] = np.sqrt(np.clip(np.diag(np.linalg.inv(F[k])), 0, None))
             except np.linalg.LinAlgError:
                 pass
+    n = len(f)
+    zeros = np.zeros(n, bool)
     flags = {"singular_region": ~(std[:, 0] / np.maximum(np.abs(it.eps.real), 1e-12) <= singular_rel_threshold),
-             "not_converged": ~it.converged}
+             "not_converged": ~it.converged,
+             "nonfinite": ~ok,
+             "blowup": (np.abs(it.eps) > 1e4) | (np.abs(it.mu) > 1e4)}
+    for name in ("branch_disagreement", "branch_ambiguous", "branch_unreliable_step"):
+        flags[name] = np.any([np.asarray(r.flags.get(name, zeros), bool) for r in singles], axis=0)
+    flags["s21_below_noise"] = np.all([np.asarray(r.flags.get("s21_below_noise", zeros), bool) for r in singles],
+                                      axis=0)
+    # The joint model has 4 real unknowns for 8+ real observations per frequency, so its fit
+    # residual tests whether ONE homogeneous (eps, mu) explains all samples. A residual well above
+    # the noise level indicates different materials, a wrong thickness or reference-plane errors.
+    flags["samples_inconsistent"] = ~(np.asarray(it.residual_rms) <= 3 * noise_sigma)
     for i, r in enumerate(singles):
-        flags[f"sample{i}_branch_disagreement"] = r.flags["branch_disagreement"]
+        for name in ("branch_disagreement", "branch_ambiguous", "s21_below_noise", "singular_region"):
+            if name in r.flags:
+                flags[f"sample{i}_{name}"] = np.asarray(r.flags[name], bool)
+
+    unc = None
+    if uncertainty:
+        spec = uncertainty if isinstance(uncertainty, UncertaintySpec) else UncertaintySpec(
+            s11_mag_rel=0.005, s11_phase_deg=0.5, s21_mag_rel=0.005, s21_phase_deg=0.5,
+            thickness_m=5e-6, ref_plane_m=5e-6, n_draws=100)
+
+        def run(pert):
+            _, _, sg, _, jt = _joint(pert, False)
+            return jt.eps, jt.mu, sg[0].selected_branch
+
+        unc = monte_carlo_multi(run, f, measurements, geom, spec, nominal_branch=singles[0].selected_branch,
+                                progress=uncertainty_progress)
+        flags["mc_branch_unstable"] = unc["branch_change_fraction"] > 0.05
+
+    eps_sig = unc["eps_loss"]["sigma_percentile"] if unc else std[:, 1]
+    mu_sig = unc["mu_loss"]["sigma_percentile"] if unc else std[:, 3]
     phys = run_all(f, samples[0]["s11"], samples[0]["s21"], samples[0]["s12"], samples[0]["s22"], it.eps, it.mu,
-                   noise_sigma=noise_sigma)
+                   eps_sigma=eps_sig, mu_sigma=mu_sig, noise_sigma=noise_sigma)
     caus = {}
+    warn = []
     if kk:
         good = ok & ~flags["singular_region"]
         if good.sum() >= 5:
-            caus["eps"] = kk_consistency(f[good], it.eps[good], sigma=std[good, 0], sigma_imag=std[good, 1],
-                                         quantity="eps")
-            caus["mu"] = kk_consistency(f[good], it.mu[good], sigma=std[good, 2], sigma_imag=std[good, 3],
-                                        quantity="mu")
-    warn = [w for r in singles for w in r.warnings if "branch" in w]
+            for q, val, col, key in (("eps", it.eps, 0, "eps"), ("mu", it.mu, 2, "mu")):
+                if unc:
+                    sr = np.maximum(unc[f"{key}_real"]["sigma_percentile"], 1e-6 * np.abs(val.real))[good]
+                    si = np.maximum(unc[f"{key}_loss"]["sigma_percentile"], 1e-6 * np.abs(val.real))[good]
+                else:
+                    sr = np.maximum(std[good, col], 1e-4 * np.abs(val.real[good]))
+                    si = np.maximum(std[good, col + 1], 1e-4 * np.abs(val.real[good]))
+                caus[q] = kk_consistency(f[good], val[good], sigma=sr, sigma_imag=si, quantity=q)
+        else:
+            warn.append("KK diagnostic skipped: fewer than 5 well-conditioned points")
+    for i, r in enumerate(singles):
+        for w in r.warnings:
+            if "ill-conditioned" in w:
+                continue  # superseded by the joint conditioning below
+            tagged = f"sample {i + 1} (L = {Ls[i] * 1e3:g} mm): {w}"
+            if tagged not in warn:
+                warn.append(tagged)
+    if flags["samples_inconsistent"].any():
+        warn.append(f"joint fit residual exceeds 3x the assumed noise ({noise_sigma:g}) at "
+                    f"{int(flags['samples_inconsistent'].sum())} frequencies: the samples are not consistent with one "
+                    "homogeneous material (check thicknesses, reference planes, sample preparation, noise_sigma)")
     if flags["singular_region"].any():
-        warn.append(f"{int(flags['singular_region'].sum())} frequencies remain ill-conditioned for all samples")
+        warn.append(f"{int(flags['singular_region'].sum())} frequencies remain ill-conditioned for the joint "
+                    "solution (all samples near half-wavelength points at once)")
     return ExtractionResult(
         frequency=f, epsilon_complex=it.eps, mu_complex=it.mu, selected_branch=singles[0].selected_branch,
         branch_margin=singles[0].branch_margin, reflection_coefficient=singles[0].reflection_coefficient,
@@ -531,8 +612,10 @@ def extract_multi_thickness(frequency, measurements, geometry="coax", branch_met
         convergence={"converged": it.converged, "residual_rms": it.residual_rms, "jacobian_cond": it.jacobian_cond},
         flags=flags, identifiability={"eps_real_std": std[:, 0], "eps_loss_std": std[:, 1], "mu_real_std": std[:, 2],
                                       "mu_loss_std": std[:, 3], "noise_sigma_assumed": noise_sigma},
-        passivity=phys, causality=caus, warnings=warn,
-        metadata={"nrw_version": __version__, "thicknesses_m": Ls, "geometry": geom.to_dict(),
-                  "noise_sigma": noise_sigma,
+        passivity=phys, causality=caus, uncertainty=unc, warnings=warn,
+        metadata={"nrw_version": __version__, "thicknesses_m": Ls, "thickness_m": Ls[0], "geometry": geom.to_dict(),
+                  "reference_plane_offsets_m": [list(m.get("reference_plane_offsets", (0.0, 0.0)))
+                                                for m in measurements],
+                  "noise_sigma": noise_sigma, "singular_rel_threshold": singular_rel_threshold,
                   "conventions": "exp(+jwt); eps = eps' - j eps''; passive => eps'', mu'' >= 0"},
-        nrw_baseline=singles[0].nrw_baseline)
+        nrw_baseline=singles[0].nrw_baseline, sample_results=singles)

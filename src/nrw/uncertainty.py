@@ -84,6 +84,11 @@ def monte_carlo(extract_fn, f, s11, s21, s12, s22, thickness_m, geom, spec: Unce
             E[i], M[i], B[i] = e, m, b
         if progress is not None:
             progress(i + 1, spec.n_draws)
+    return _summarize(E, M, B, spec, failures, nominal_branch)
+
+
+def _summarize(E, M, B, spec, failures, nominal_branch):
+    """Robust per-frequency summaries of Monte Carlo draws (shared by single/multi-sample MC)."""
     out = {"n_draws": spec.n_draws, "n_failed_draws": failures, "spec": spec.to_dict()}
     for name, arr in (("eps_real", E.real), ("eps_loss", -E.imag), ("mu_real", M.real), ("mu_loss", -M.imag)):
         with np.errstate(invalid="ignore"):
@@ -97,3 +102,42 @@ def monte_carlo(extract_fn, f, s11, s21, s12, s22, thickness_m, geom, spec: Unce
     if nominal_branch is not None:
         out["branch_change_fraction"] = np.mean(B != np.asarray(nominal_branch)[None, :], axis=0)
     return out
+
+
+def monte_carlo_multi(extract_fn, f, samples, geom, spec: UncertaintySpec, nominal_branch=None, progress=None):
+    """Monte Carlo for a joint multi-sample extraction.
+
+    ``samples``: list of dicts with "s11", "s21", "s12", "s22" (complex arrays, S12/S22 may be
+    None) and "thickness" (m). In every draw each sample is perturbed INDEPENDENTLY with the
+    same ``spec`` (its own S-parameter errors, its own thickness error, its own reference-plane
+    errors), and ``extract_fn(perturbed_samples) -> (eps, mu, branch)`` is re-run.
+    ``branch`` should be the branch of the first sample (compared with ``nominal_branch``).
+    """
+    rng = np.random.default_rng(spec.seed)
+    f = np.asarray(f, float)
+    N = len(f)
+    E = np.full((spec.n_draws, N), np.nan + 0j)
+    M = np.full((spec.n_draws, N), np.nan + 0j)
+    B = np.zeros((spec.n_draws, N), dtype=int)
+    failures = 0
+    for i in range(spec.n_draws):
+        pert = []
+        for smp in samples:
+            s12 = smp["s21"] if smp.get("s12") is None else smp["s12"]
+            s22 = smp["s11"] if smp.get("s22") is None else smp["s22"]
+            a11, a21 = _perturb_pair(smp["s11"], smp["s21"], spec, rng)
+            a22, a12 = _perturb_pair(s22, s12, spec, rng)
+            if spec.ref_plane_m:
+                d1, d2 = spec.ref_plane_m * rng.standard_normal(2)
+                a11, a21, a12, a22 = shift_reference_planes(f, a11, a21, a12, a22, geom, d1, d2)
+            pert.append(dict(smp, s11=a11, s21=a21, s12=a12, s22=a22,
+                             thickness=smp["thickness"] + spec.thickness_m * rng.standard_normal()))
+        try:
+            e, m, b = extract_fn(pert)
+        except Exception:  # noqa: BLE001 - a failed draw is counted, not hidden
+            failures += 1
+        else:
+            E[i], M[i], B[i] = e, m, b
+        if progress is not None:
+            progress(i + 1, spec.n_draws)
+    return _summarize(E, M, B, spec, failures, nominal_branch)

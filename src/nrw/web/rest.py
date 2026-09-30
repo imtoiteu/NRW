@@ -1,6 +1,7 @@
 """Optional REST API (FastAPI) for automated processing.
 
     POST /api/v1/extract   multipart: file (.s2p/.csv) + form fields  -> JSON results + diagnostics
+                           (optional file2 + thickness2_mm: two-thickness joint solution)
     GET  /api/v1/health    -> {"status": "ok", "software": ...}
 
 Authentication: ``Authorization: Bearer <token>`` where the token is ``NRW_API_TOKEN`` if set,
@@ -64,18 +65,29 @@ async def extract(request: Request,
                   noise_sigma: float = Form(1e-3),
                   freq_unit: str | None = Form(None),
                   kk: bool = Form(True),
+                  file2: UploadFile | None = File(None),
+                  thickness2_mm: float | None = Form(None),
+                  offset1_2_mm: float = Form(0.0),
+                  offset2_2_mm: float = Form(0.0),
                   authorization: str | None = Header(None)):
     _auth(request, authorization)
     content = await file.read()
-    if len(content) > MAX_BYTES:
+    content2 = await file2.read() if file2 is not None else None
+    if len(content) > MAX_BYTES or (content2 is not None and len(content2) > MAX_BYTES):
         raise HTTPException(413, "file too large")
+    if (content2 is None) != (thickness2_mm is None):
+        raise HTTPException(422, "two-thickness mode needs both file2 and thickness2_mm")
     try:
         data = load_measurement_bytes(file.filename or "upload.s2p", content, freq_unit=freq_unit)
         cfg = A.AnalysisConfig(thickness_mm=thickness_mm, geometry=geometry, waveguide_a_mm=waveguide_a_mm,
                                f_min_ghz=f_min_ghz, f_max_ghz=f_max_ghz, method=method,
                                assume_nonmagnetic=assume_nonmagnetic, branch_method=branch_method,
-                               offset1_mm=offset1_mm, offset2_mm=offset2_mm, noise_sigma=noise_sigma, kk=kk)
-        out = A.run_analysis(data, cfg, data_summary=describe(data))
+                               offset1_mm=offset1_mm, offset2_mm=offset2_mm, noise_sigma=noise_sigma, kk=kk,
+                               two_thickness=content2 is not None, thickness2_mm=thickness2_mm,
+                               offset1_2_mm=offset1_2_mm, offset2_2_mm=offset2_2_mm)
+        data2 = (load_measurement_bytes(file2.filename or "upload2.s2p", content2, freq_unit=freq_unit)
+                 if content2 is not None else None)
+        out = A.run_analysis(data, cfg, data_summary=describe(data), data2=data2)
     except ValueError as e:
         raise HTTPException(422, str(e)) from e
     body = {"metadata": X.metadata(out),

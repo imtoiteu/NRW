@@ -9,7 +9,7 @@ Per-frequency status
 --------------------
 ``unreliable`` if any of: non-finite/blow-up value; ill-conditioned (Cramer-Rao) point;
 branch trackers disagree; Monte Carlo branch unstable; |S21| at the noise floor;
-solver not converged; significant passivity violation (loss < -k sigma) or negative
+solver not converged; two-thickness fit residual > 3 x noise; significant passivity violation (loss < -k sigma) or negative
 attenuation beyond noise.
 ``attention`` if any of: near a half-wavelength point; |S11| at the noise floor; weak branch
 margin or unreliable phase step; alternative least-squares minimum; ambiguous Gamma root;
@@ -25,7 +25,8 @@ RED (the data/configuration do not support a trustworthy extraction) if any:
   R4 |S21| below the noise floor at > 25 %;
   R5 ill-conditioned (Cramer-Rao) at > 50 %;
   R6 a mu = 1 method was used although NRW indicates |mu - 1| > 0.05;
-  R7 significant material passivity violation at > 10 %.
+  R7 significant material passivity violation at > 10 %;
+  R8 two-thickness mode: joint fit residual > 3 x noise at > 10 % (samples inconsistent).
 YELLOW if not RED and any: an ``unreliable`` or ``attention`` point exists; the KK
 diagnostic failed or could not be run; a model assumption (reciprocity, port symmetry) is
 violated.
@@ -41,9 +42,10 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-RULES_VERSION = "1.0"
+RULES_VERSION = "1.1"
 LIMITS = {"R1_nonfinite": 0.10, "R2_network_passivity": 0.10, "R3_branch": 0.10, "R4_s21_floor": 0.25,
-          "R5_ill_conditioned": 0.50, "R7_material_passivity": 0.10}
+          "R5_ill_conditioned": 0.50, "R7_material_passivity": 0.10,
+          "R8_samples_inconsistent": 0.10}
 
 UNRELIABLE_FLAGS = {
     "nonfinite": "non-finite value",
@@ -53,6 +55,7 @@ UNRELIABLE_FLAGS = {
     "mc_branch_unstable": "Branch selection uncertain (Monte Carlo draws change branch)",
     "s21_below_noise": "Transmission magnitude too small for reliable inversion",
     "not_converged": "iterative solver did not converge",
+    "samples_inconsistent": "two-thickness fit residual > 3 x noise (samples not consistent with one material)",
 }
 ATTENTION_FLAGS = {
     "near_half_wavelength": "near a half-wavelength point (beta L ~ k pi)",
@@ -169,6 +172,11 @@ def assess(res) -> Assessment:
     if any("mu = 1 assumption" in w for w in res.warnings):
         add("RED", "R6", "a mu = 1 method was used but NRW indicates a magnetic sample: the permittivity is biased "
                          "(use a simultaneous eps/mu method)")
+    inc = flags.get("samples_inconsistent", np.zeros(n, bool))
+    if frac(inc) > LIMITS["R8_samples_inconsistent"]:
+        add("RED", "R8", "two-thickness mode: the samples are not consistent with one homogeneous material at more "
+                         "than 10 % of frequencies (joint fit residual > 3 x noise): check thicknesses, reference "
+                         "planes, sample preparation and the assumed noise level", inc)
     if frac(pv_fail) > LIMITS["R7_material_passivity"]:
         add("RED", "R7", "significant passivity violations (loss < -2 sigma) at more than 10 % of frequencies", pv_fail)
 

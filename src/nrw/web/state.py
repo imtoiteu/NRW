@@ -9,7 +9,8 @@ from __future__ import annotations
 from collections import OrderedDict
 
 DATA_KEYS = ("data", "input_name", "input_bytes", "input_summary", "demo_meta", "results", "current_key",
-             "comparison", "mc_key", "exports", "fig_memo")
+             "comparison", "mc_key", "exports", "fig_memo",
+             "data2", "input2_name", "input2_bytes", "input2_summary", "demo2_meta")
 MAX_CACHED_RESULTS = 6
 
 

@@ -303,3 +303,140 @@ def test_streamlit_compare_uncertainty_export_flow(monkeypatch):
     t = files["extracted_parameters.csv"].decode().splitlines()[0]
     assert "eps_real_p2.5" in t  # Monte Carlo percentiles exported
     security._reset_for_tests()
+
+
+# ------------------------------------------------------------------------------------------ two-thickness
+PAIR = ("synthetic_lowloss_magnetic_20mm_halfwave.s2p", "synthetic_lowloss_magnetic_13mm_halfwave.s2p")
+
+
+def _pair():
+    return [load_measurement_bytes(n, (DEMO / n).read_bytes()) for n in PAIR]
+
+
+def test_two_thickness_analysis_beats_single_samples():
+    from nrw.web.analysis import AnalysisConfig, run_analysis, single_sample_outcomes
+    d1, d2 = _pair()
+    cfg = AnalysisConfig(thickness_mm=20.0, two_thickness=True, thickness2_mm=13.0, kk=False)
+    o = run_analysis(d1, cfg, data2=d2)
+    assert o.result.method == "multi_thickness_eps_mu" and o.result.sample_results
+    singles = single_sample_outcomes(o)
+    assert len(singles) == 2
+    eps_t, mu_t = 4 - 0.004j, 1.5 - 0.003j
+    err_joint = np.nanmax(np.abs(o.result.epsilon_complex - eps_t))
+    for s in singles.values():
+        assert np.nanmax(np.abs(s.result.epsilon_complex - eps_t)) > 5 * err_joint
+        assert s.result.flags["singular_region"].sum() > o.result.flags["singular_region"].sum()
+    assert np.nanmax(np.abs(o.result.mu_complex - mu_t)) < 0.05
+    assert {"branch_index_sample1", "branch_index_sample2", "ill_conditioned_sample1_alone"} <= set(o.table.columns)
+    assert (o.assessment.point_status == "unreliable").sum() == 0
+
+
+def test_two_thickness_refuses_mismatched_grid_and_equal_thickness():
+    from dataclasses import replace
+
+    from nrw.web.analysis import AnalysisConfig, run_analysis
+    d1, d2 = _pair()
+    d2b = replace(d2, frequency=d2.frequency[::2], s11=d2.s11[::2], s21=d2.s21[::2], s12=d2.s12[::2],
+                  s22=d2.s22[::2])
+    with pytest.raises(ValueError, match="same frequency grid"):
+        run_analysis(d1, AnalysisConfig(thickness_mm=20.0, two_thickness=True, thickness2_mm=13.0, kk=False),
+                     data2=d2b)
+    with pytest.raises(ValueError, match="different thicknesses"):
+        run_analysis(d1, AnalysisConfig(thickness_mm=20.0, two_thickness=True, thickness2_mm=20.0), data2=d2)
+    with pytest.raises(ValueError, match="no second sample"):
+        run_analysis(d1, AnalysisConfig(thickness_mm=20.0, two_thickness=True, thickness2_mm=13.0))
+
+
+def test_two_thickness_monte_carlo_and_export():
+    from nrw.web import export as X
+    from nrw.web.analysis import AnalysisConfig, run_analysis
+    d1, d2 = _pair()
+    cfg = AnalysisConfig(thickness_mm=20.0, two_thickness=True, thickness2_mm=13.0, f_max_ghz=6.0, kk=False,
+                         uncertainty={"s21_phase_deg": 0.5, "thickness_m": 5e-6, "n_draws": 6, "seed": 3})
+    calls = []
+    o = run_analysis(d1, cfg, data2=d2, progress=lambda i, n: calls.append(i))
+    u = o.result.uncertainty
+    assert calls == list(range(1, 7)) and u["n_draws"] == 6 and u["n_failed_draws"] == 0
+    assert np.all(u["eps_real"]["p2.5"] <= u["eps_real"]["p97.5"])
+    md = X.metadata(o)
+    assert md["two_thickness"] and np.allclose(md["thicknesses_m"], [0.02, 0.013])
+    z = zipfile.ZipFile(io.BytesIO(X.zip_bundle(o, {}, "a.s2p", b"1", extra_inputs={"b.s2p": b"2"})))
+    assert {"input/a.s2p", "input/b.s2p"} <= set(z.namelist())
+    assert "sample 2: 13 mm" in X.report_html(o, {}).decode()
+
+
+def test_rest_api_two_thickness(monkeypatch):
+    pytest.importorskip("fastapi")
+    pytest.importorskip("httpx")
+    from fastapi.testclient import TestClient
+
+    from nrw.web import rest, security
+    security._reset_for_tests()
+    monkeypatch.setattr(security, "FAIL_DELAY_S", 0.0)
+    monkeypatch.setenv("NRW_APP_PASSWORD", "long-enough-password")
+    monkeypatch.delenv("NRW_API_TOKEN", raising=False)
+    c = TestClient(rest.app)
+    h = {"Authorization": "Bearer long-enough-password"}
+    files = {"file": (PAIR[0], (DEMO / PAIR[0]).read_bytes()), "file2": (PAIR[1], (DEMO / PAIR[1]).read_bytes())}
+    r = c.post("/api/v1/extract", files=files, data={"thickness_mm": "20", "thickness2_mm": "13", "f_max_ghz": "6",
+                                                     "kk": "false"}, headers=h)
+    assert r.status_code == 200, r.text
+    assert r.json()["metadata"]["method_used"] == "multi_thickness_eps_mu"
+    r = c.post("/api/v1/extract", files=files, data={"thickness_mm": "20"}, headers=h)
+    assert r.status_code == 422  # file2 without thickness2_mm
+    security._reset_for_tests()
+
+
+def test_streamlit_two_thickness_flow(monkeypatch):
+    pytest.importorskip("streamlit")
+    from streamlit.testing.v1 import AppTest
+
+    from nrw.web import security
+    security._reset_for_tests()
+    monkeypatch.setenv("NRW_APP_PASSWORD", "long-enough-password")
+    monkeypatch.setattr(security, "FAIL_DELAY_S", 0.0)
+    at = AppTest.from_file(str(Path(__file__).resolve().parents[1] / "app.py"), default_timeout=900).run()
+    at.text_input[0].input("long-enough-password")
+    at.button[0].click()
+    at.run()
+    at.radio[0].set_value("Synthetic demonstration data").run()
+    at.selectbox[0].set_value(PAIR[0]).run()
+    [b for b in at.button if b.label == "Load demo data"][0].click()
+    at.run()
+    [b for b in at.button if b.label.startswith("Load paired synthetic demo sample")][0].click()
+    at.run()
+    assert "data2" in at.session_state and not at.exception
+    assert [c for c in at.checkbox if c.label.startswith("Use the joint two-thickness")][0].value
+    [b for b in at.button if b.label == "Run extraction"][0].click()
+    at.run()
+    assert not at.exception
+    key = at.session_state["current_key"]
+    assert at.session_state["results"][key].result.method == "multi_thickness_eps_mu"
+    [b for b in at.button if b.label == "Prepare export files"][0].click()
+    at.run()
+    assert not at.exception
+    z = zipfile.ZipFile(io.BytesIO(at.session_state["exports"][1]["nrw_results.zip"]))
+    assert {f"input/{PAIR[0]}", f"input/{PAIR[1]}"} <= set(z.namelist())
+    [b for b in at.button if b.label == "Remove second sample"][0].click()
+    at.run()
+    assert "data2" not in at.session_state and "data" in at.session_state
+    security._reset_for_tests()
+
+
+def test_two_thickness_detects_inconsistent_samples(coax):
+    from nrw import extract_multi_thickness
+    f = np.linspace(2e9, 18e9, 161)
+    rng = np.random.default_rng(4)
+
+    def meas(eps, L):
+        s = [complex_gaussian(x, 1e-3, rng) for x in make(f, eps, 1.5 - 0.003j, L, coax)]
+        return dict(s11=s[0], s21=s[1], s12=s[2], s22=s[3], thickness=L)
+
+    ok = extract_multi_thickness(f, [meas(4 - 0.004j, 20e-3), meas(4 - 0.004j, 13e-3)], kk=False)
+    bad = extract_multi_thickness(f, [meas(4 - 0.004j, 20e-3), meas(4.2 - 0.004j, 13e-3)], kk=False)
+    assert ok.flags["samples_inconsistent"].mean() < 0.05
+    assert not any(r["rule"] == "R8" for r in assess(ok).reasons)
+    a = assess(bad)
+    assert bad.flags["samples_inconsistent"].mean() > 0.5
+    assert a.level == "RED" and any(r["rule"] == "R8" for r in a.reasons)
+    assert any("not consistent with one" in w for w in bad.warnings)

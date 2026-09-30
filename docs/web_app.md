@@ -163,13 +163,31 @@ version and Git commit.
    * ε″ and μ″ **exactly as extracted**, with a ±2σ band. Each frequency is classified *pass*
      (≥ 0), *ambiguous* (negative, within 2σ), *fail* (< −2σ) or *undetermined*;
    * the finite-band KK diagnostic statement, its assumptions, and the residual plot.
-7. **Compare methods.** Overlays the selected methods on the same data and settings, with a
+7. **Two-thickness mode (optional).** In *Data source → Second sample* upload a second
+   measurement of the same material with a different thickness (or, for the low-loss magnetic
+   demo, load the paired 13 mm synthetic sample).
+   * The Data tab previews sample 2 and checks that both files share the same frequency grid.
+     Measured data are never interpolated.
+   * *Configure & extract* then offers "Use the joint two-thickness solution", with sample 2's
+     thickness and reference-plane offsets.
+   * The joint solver is `nrw.extract_multi_thickness`. Each sample is first solved alone; the
+     better-conditioned single-sample solution starts a joint least-squares fit of one (ε, μ) to
+     both samples. The Cramér–Rao bound is combined over both samples.
+   * The Results tab tabulates ill-conditioned and unreliable points for each sample alone and
+     for the joint solution. The results table carries per-sample branch indices.
+   * *Compare methods* overlays the joint solution on each sample alone.
+   * Monte Carlo perturbs every sample independently (S-parameters, thickness, planes).
+   * Exports record both files and thicknesses, and the ZIP contains both inputs.
+   * On the synthetic demo pair (20 mm + 13 mm, ε = 4 − 0.004j, μ = 1.5 − 0.003j), the maximum
+     |Δε| falls from 0.51 and 0.84 (each sample alone) to 0.022 (joint), and ill-conditioned
+     points fall from 28 and 27 to 0.
+8. **Compare methods.** Overlays the selected methods on the same data and settings, with a
    status per method and the relative disagreement between the simultaneous ε/μ methods.
-8. **Uncertainty (optional).** Monte Carlo through the whole pipeline.
+9. **Uncertainty (optional).** Monte Carlo through the whole pipeline.
    * Inputs: |S11|, |S21| (%), phases (°), additive noise, thickness (µm) and plane position
      (µm).
    * 100 / 500 / 1000 / custom draws. The progress bar shows the estimated remaining time.
-9. **Export.**
+10. **Export.**
    * `extracted_parameters.csv`, `extracted_parameters.json`, `diagnostics.csv`;
    * `analysis_report.html`, a self-contained report with source file, timestamp, commit,
      thickness, geometry, method, branch method, frequency interval, warnings, diagnostic
@@ -204,6 +222,7 @@ holder.
   * Baker-Jarvis / NIST iterative (μ = 1; permittivity only);
   * Non-iterative ε with μ = 1 (Boughriet);
   * Frequency-regularised ε & μ (model assumption; comparison only).
+  * Two-thickness joint ε & μ (when a second sample is loaded; see §5).
 
   The two μ = 1 methods do not report μ. Classical NRW is never labelled Baker-Jarvis.
 * **Branch strategies:**
@@ -219,7 +238,7 @@ holder.
 
 ## 8. Status rules (GREEN / YELLOW / RED)
 
-The rules are implemented in `src/nrw/assessment.py` (rules version 1.0). The status summarises
+The rules are implemented in `src/nrw/assessment.py` (rules version 1.1). The status summarises
 diagnostics. **It is not an accuracy percentage and does not prove the values correct.**
 Wrong thickness, air gaps and calibration errors are invisible to these diagnostics
 (docs/benchmark_report.md §6).
@@ -241,7 +260,9 @@ Overall:
   * R4: |S21| at the noise floor at > 25 %;
   * R5: ill-conditioned at > 50 %;
   * R6: a μ = 1 method used on a sample that NRW indicates is magnetic;
-  * R7: significant passivity violations at > 10 %.
+  * R7: significant passivity violations at > 10 %;
+  * R8: two-thickness mode, joint fit residual > 3 × noise at > 10 % of frequencies (the samples
+    are not consistent with one material).
 * **YELLOW** if not RED and any of: unreliable or attention points (Y1, Y2); the KK
   diagnostic failed or was unavailable (Y3); a model assumption (reciprocity, port symmetry)
   is violated beyond noise (Y4).
@@ -263,7 +284,8 @@ curl -s -H "Authorization: Bearer $NRW_APP_PASSWORD" \
 
 Form fields: `thickness_mm` (required), `geometry` (`coax`/`waveguide`), `waveguide_a_mm`,
 `method`, `assume_nonmagnetic`, `branch_method`, `f_min_ghz`, `f_max_ghz`, `offset1_mm`,
-`offset2_mm`, `noise_sigma`, `freq_unit`, `kk`.
+`offset2_mm`, `noise_sigma`, `freq_unit`, `kk`; two-thickness mode: `file2`, `thickness2_mm`,
+`offset1_2_mm`, `offset2_2_mm`.
 
 The response is JSON: `metadata` (settings, commit, assessment, warnings, KK statements),
 `results` (the same columns as `extracted_parameters.csv`) and `diagnostics`. The interactive
@@ -280,9 +302,11 @@ HTTP caveat as above).
 
 ## 11. Known limitations
 
-* Single-sample extraction only in the UI. The two-thickness solver
-  (`nrw.extract_multi_thickness`), the recommended remedy for half-wave regions of magnetic
-  samples, is available from Python but not yet from the browser.
+* Two-thickness mode needs both samples on an identical frequency grid (no interpolation) and
+  assumes one homogeneous material. Inconsistent samples are detected through the joint fit
+  residual: residual > 3 × noise is flagged per frequency and gives RED rule R8 above 10 %.
+  In a synthetic check, the residual was 8.5e-4 for the same material (σ = 1e-3) and 6.8e-2
+  when sample 2's ε differed by 5 %. A thickness or reference-plane error raises it too.
 * Homogeneous, isotropic slab model filling the cross-section. Air gaps are not corrected:
   the result is the effective parameters of the gapped line.
 * The UI's reference-plane correction assumes air-filled, lossless offset sections.

@@ -131,20 +131,37 @@ def _sidebar():
 
 
 # ------------------------------------------------------------------------------------------
-def _load(name: str, content: bytes, freq_unit=None, demo_meta=None):
+def _load(name: str, content: bytes, freq_unit=None, demo_meta=None, slot=1):
+    """Load sample 1 (replaces everything) or sample 2 (two-thickness mode; keeps sample 1)."""
     ss = st.session_state
     try:
         data = load_measurement_bytes(name, content, freq_unit=freq_unit)
     except ValueError as e:
         st.error(f"Could not read {name}: {e}")
         return False
-    state.clear_session_data(ss)
-    ss["data"] = data
-    ss["input_name"] = name
-    ss["input_bytes"] = content
-    ss["input_summary"] = describe(data)
-    ss["demo_meta"] = demo_meta
+    if slot == 1:
+        state.clear_session_data(ss)
+        ss["data"] = data
+        ss["input_name"] = name
+        ss["input_bytes"] = content
+        ss["input_summary"] = describe(data)
+        ss["demo_meta"] = demo_meta
+    else:
+        _drop_second_sample()
+        ss["data2"] = data
+        ss["input2_name"] = name
+        ss["input2_bytes"] = content
+        ss["input2_summary"] = describe(data)
+        ss["demo2_meta"] = demo_meta
     return True
+
+
+def _drop_second_sample():
+    ss = st.session_state
+    for k in ("data2", "input2_name", "input2_bytes", "input2_summary", "demo2_meta"):
+        ss.pop(k, None)
+    ss.pop("comparison", None)
+    ss.pop("exports", None)
 
 
 def _data_source():
@@ -181,6 +198,42 @@ def _data_source():
             if st.button("Load demo data", type="primary"):
                 if _load(name, (DEMO_DIR / name).read_bytes(), demo_meta=manifest[name]):
                     st.rerun()
+    if "data" in ss:
+        _second_sample_source()
+
+
+def _second_sample_source():
+    ss = st.session_state
+    with st.expander("Second sample — two-thickness mode (optional)", expanded="data2" in ss):
+        st.caption("A second sample of the SAME material with a DIFFERENT thickness, measured on the same frequency "
+                   "grid. The joint solution keeps ε and μ separable near the half-wavelength points of either "
+                   "sample (the recommended remedy for low-loss magnetic samples; docs/final_method.md).")
+        if "data2" in ss:
+            c1, c2 = st.columns([3, 1])
+            c1.markdown(f"Loaded second sample: **{ss['input2_name']}**"
+                        + (" (synthetic demonstration data)" if ss.get("demo2_meta") else ""))
+            if c2.button("Remove second sample"):
+                _drop_second_sample()
+                st.rerun()
+            return
+        c1, c2 = st.columns([3, 1])
+        with c2:
+            unit2 = st.selectbox("CSV frequency unit (sample 2)", ["(from header)", "Hz", "kHz", "MHz", "GHz"],
+                                 key="unit2")
+        with c1:
+            up2 = st.file_uploader("Sample 2: Touchstone .s2p or CSV", type=["s2p", "csv", "txt", "tsv"], key="up2")
+        if up2 is not None and st.button("Load second sample", type="primary"):
+            if _load(up2.name, up2.getvalue(), None if unit2.startswith("(") else unit2.lower(), slot=2):
+                st.rerun()
+        pair = (ss.get("demo_meta") or {}).get("pair_with")
+        if pair and (DEMO_DIR / pair).exists():
+            try:
+                meta2 = json.loads((DEMO_DIR / "manifest.json").read_text()).get(pair)
+            except OSError:
+                meta2 = None
+            if st.button(f"Load paired synthetic demo sample ({pair})"):
+                if _load(pair, (DEMO_DIR / pair).read_bytes(), demo_meta=meta2, slot=2):
+                    st.rerun()
 
 
 # ------------------------------------------------------------------------------------------
@@ -214,6 +267,33 @@ def _tab_data():
     c2.plotly_chart(P.sparam_phase(data, unwrap=unwrap), width="stretch")
     if not problems:
         st.success("Input validation passed. Continue with 'Configure & extract'.")
+    if "data2" in ss:
+        _sample2_preview()
+
+
+def _sample2_preview():
+    ss = st.session_state
+    d2, s2 = ss["data2"], ss["input2_summary"]
+    st.divider()
+    st.markdown(f"#### Sample 2 (two-thickness mode): {s2['source']}")
+    if ss.get("demo2_meta"):
+        st.info(f"Synthetic demonstration data — thickness {ss['demo2_meta']['thickness_mm']} mm.")
+    c = st.columns(4)
+    c[0].metric("Points", s2["n_points"])
+    c[1].metric("Frequency range", f"{s2['f_min_hz']/1e9:.4g}–{s2['f_max_hz']/1e9:.4g} GHz")
+    c[2].metric("Parameters", ", ".join(k.upper() for k in s2["measured"]))
+    c[3].metric("|S21| min / max", f"{s2['s21_abs_min']:.3g} / {s2['s21_abs_max']:.3g}")
+    for p in _validation_messages(s2):
+        st.error(f"Sample 2: {p}")
+    why = A.grids_compatible(ss["data"].frequency, d2.frequency)
+    if why:
+        st.warning(f"Frequency grids of the two samples are not identical ({why}). The joint solution needs "
+                   "identical points in the analysed window; measured data are never interpolated.")
+    else:
+        st.success("Both samples share the same frequency grid.")
+    c1, c2 = st.columns(2)
+    c1.plotly_chart(P.sparam_magnitude(d2), width="stretch", key="s2_mag")
+    c2.plotly_chart(P.sparam_phase(d2), width="stretch", key="s2_phase")
 
 
 def _validation_messages(summ) -> list[str]:
@@ -253,6 +333,19 @@ def _tab_configure():
                             format_func=lambda k: f"{k} (a = {WAVEGUIDES[k][0]} mm, {WAVEGUIDES[k][1]} GHz)"
                             if k in WAVEGUIDES else "custom a")
         a_custom = c[2].number_input("Custom broad-wall width a (mm)", min_value=0.0, value=22.86, step=0.01)
+        two, thick2, o12, o22 = False, None, 0.0, 0.0
+        if "data2" in ss:
+            st.markdown("##### Two-thickness mode")
+            demo2 = ss.get("demo2_meta") or {}
+            two = st.checkbox(f"Use the joint two-thickness solution with sample 2 ({ss['input2_name']})", value=True,
+                              help=A.JOINT_LABEL[1])
+            c = st.columns(3)
+            thick2 = c[0].number_input("Sample 2 thickness (mm)", min_value=0.0,
+                                       value=float(demo2.get("thickness_mm", 1.0)), step=0.01, format="%.4f")
+            o12 = c[1].number_input("Sample 2 offset port 1 (mm)", value=0.0, step=0.01, format="%.4f")
+            o22 = c[2].number_input("Sample 2 offset port 2 (mm)", value=0.0, step=0.01, format="%.4f")
+            st.caption("When enabled, the joint ε & μ solver is used and the method choice below applies only to "
+                       "'Compare methods' (sample 1). Geometry, window, branch method and noise level apply to both.")
         st.markdown("##### Frequency window")
         win = st.slider("Analysed band (GHz)", min_value=float(fmin), max_value=float(fmax),
                         value=(float(fmin), float(fmax)), step=max((fmax - fmin) / 1000, 1e-6), format="%.4f")
@@ -301,7 +394,12 @@ def _tab_configure():
         method=method, assume_nonmagnetic=nonmag, branch_method=branch,
         prior_eps_mu=prior if branch == "prior" else None, offset1_mm=off1, offset2_mm=off2,
         holder_length_mm=holder if holder > 0 else None, noise_sigma=noise, average_ports=avg,
-        regularization=reg, kk=kk)
+        regularization=reg, kk=kk, two_thickness=bool(two), thickness2_mm=float(thick2) if two else None,
+        offset1_2_mm=o12 if two else 0.0, offset2_2_mm=o22 if two else 0.0)
+    if two and _validation_messages(ss["input2_summary"]) and (
+            not ss["input2_summary"]["finite"] or not ss["input2_summary"]["strictly_increasing"]):
+        st.error("Sample 2 failed input validation (see the Data tab).")
+        return
     errs = cfg.validate()
     if errs:
         for e in errs:
@@ -322,12 +420,13 @@ def _tab_configure():
 
 def _run(cfg, progress=None):
     ss = st.session_state
-    key = cfg.key(A.data_hash(ss["data"]))
+    key = cfg.key(A.combined_hash(ss["data"], ss.get("data2"), cfg))
     out = state.recall(ss, key)
     if out is None:
         with st.spinner("Running extraction (core nrw package)…"):
             try:
-                out = A.run_analysis(ss["data"], cfg, progress=progress, data_summary=ss["input_summary"])
+                out = A.run_analysis(ss["data"], cfg, progress=progress, data_summary=ss["input_summary"],
+                                     data2=ss.get("data2") if cfg.two_thickness else None)
             except ValueError as e:
                 st.error(f"Extraction not possible: {e}")
                 return None
@@ -398,7 +497,10 @@ def _tab_results(outcome):
         return
     res = outcome.result
     _assessment_banner(outcome)
-    st.caption(f"Method: **{A.METHODS.get(outcome.config.method, ('',))[0]}** → `{res.method}` · branch: "
+    label = A.JOINT_LABEL[0] if res.method == A.JOINT_METHOD else A.METHODS.get(outcome.config.method, ('',))[0]
+    if res.method == A.JOINT_METHOD:
+        _joint_summary(outcome)
+    st.caption(f"Method: **{label}** → `{res.method}` · branch: "
                f"`{res.branch_method}` · {len(res.frequency)} frequencies · shaded: red = unreliable, "
                "amber = attention. Curves are not smoothed and flagged points are not removed.")
     if res.method in A.EPS_ONLY:
@@ -410,6 +512,25 @@ def _tab_results(outcome):
     st.plotly_chart(_fig(outcome, "tan", P.loss_tangent_figure), width="stretch")
     st.markdown("##### Results table")
     st.dataframe(outcome.table, width="stretch", height=360, hide_index=True)
+
+
+def _joint_summary(outcome):
+    """How much the second thickness helped (from the retained single-sample solutions)."""
+    res = outcome.result
+    Ls = res.metadata.get("thicknesses_m", [])
+    rows = []
+    for label, o in A.single_sample_outcomes(outcome).items():
+        rows.append({"solution": label, "status": o.assessment.level,
+                     "ill-conditioned points": int(np.sum(o.result.flags.get("singular_region", 0))),
+                     "unreliable points": int(np.sum(o.assessment.point_status == "unreliable"))})
+    rows.append({"solution": "joint two-thickness", "status": outcome.assessment.level,
+                 "ill-conditioned points": int(np.sum(res.flags.get("singular_region", 0))),
+                 "unreliable points": int(np.sum(outcome.assessment.point_status == "unreliable"))})
+    st.info("Two-thickness joint solution with samples of "
+            + " and ".join(f"{L * 1e3:g} mm" for L in Ls) + ". The branch plot and diagnostic curves refer to "
+            "sample 1; per-sample branch indices are in the results table. See 'Compare methods' for the overlay "
+            "of the joint and single-sample solutions.")
+    st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch")
 
 
 def _tab_diagnostics(outcome):
@@ -484,6 +605,17 @@ def _tab_compare():
     base = state.recall(ss, ss["current_key"]) if ss.get("current_key") else None
     if not _need(base):
         return
+    if base.result.method == A.JOINT_METHOD:
+        st.markdown("##### Joint two-thickness solution vs each sample alone")
+        st.caption("Single-sample solutions are the ones computed inside the joint solver (iterative ε & μ, same "
+                   "branch method); nothing is recomputed. Spikes in the single-sample curves are the "
+                   "half-wavelength ill-conditioning that the second thickness removes.")
+        outs = {"joint two-thickness": base, **A.single_sample_outcomes(base)}
+        cols = st.columns(2)
+        for i, k in enumerate(["eps_real", "eps_loss", "mu_real", "mu_loss"]):
+            cols[i % 2].plotly_chart(P.comparison_figure(outs, k, {}), width="stretch", key=f"joint_cmp_{k}")
+        st.divider()
+        st.markdown("##### Single-sample methods on sample 1")
     st.caption("Runs the core methods on the same data, frequency window, geometry, reference planes and branch "
                "method as the current extraction. Unstable regions are shown, not hidden. μ is not plotted for "
                "μ = 1 methods (it is assumed, not extracted).")
@@ -596,8 +728,11 @@ def _tab_export(outcome):
                     "extracted_parameters.json": X.results_json(outcome),
                     "diagnostics.csv": X.diagnostics_csv(outcome),
                     "analysis_report.html": X.report_html(outcome, figs),
-                    "nrw_results.zip": X.zip_bundle(outcome, figs, ss.get("input_name") if include_input else None,
-                                                    ss.get("input_bytes") if include_input else None, cmp),
+                    "nrw_results.zip": X.zip_bundle(
+                        outcome, figs, ss.get("input_name") if include_input else None,
+                        ss.get("input_bytes") if include_input else None, cmp,
+                        extra_inputs={ss["input2_name"]: ss["input2_bytes"]}
+                        if include_input and outcome.config.two_thickness and "data2" in ss else None),
                 }
                 ss["exports"] = (key, files, figs)
         _, files, figs = ss["exports"]

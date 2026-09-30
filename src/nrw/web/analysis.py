@@ -18,7 +18,7 @@ from datetime import datetime, timezone
 import numpy as np
 import pandas as pd
 
-from ..api import ExtractionResult, extract_material_parameters
+from ..api import ExtractionResult, extract_material_parameters, extract_multi_thickness
 from ..assessment import Assessment, assess, passivity_classes
 from ..io import TwoPortData
 from ..uncertainty import UncertaintySpec
@@ -50,6 +50,13 @@ METHODS = {
                            "that can bias sharp features; use only for comparison and report the weight."),
 }
 EPS_ONLY = ("baker_jarvis", "nrw_eps")
+JOINT_METHOD = "multi_thickness_eps_mu"
+JOINT_LABEL = ("Two-thickness joint ε & μ least squares",
+               "Fits one (ε, μ) at every frequency to the S-parameters of BOTH samples of the same material "
+               "(nrw.extract_multi_thickness). Each sample is first solved alone (NRW + branch + ε/μ least squares); "
+               "the better-conditioned single-sample solution starts the joint fit. Because the half-wavelength "
+               "points of different lengths do not coincide, the ε/μ separation stays identifiable except where "
+               "both samples resonate at once (NIST TN 1355-R two-length idea; docs/benchmark_report.md §3).")
 
 BRANCH_METHODS = {
     "anchored": ("Automatic robust tracking (recommended)",
@@ -91,6 +98,11 @@ class AnalysisConfig:
     regularization: float = 1e-2
     kk: bool = True
     uncertainty: dict | None = None  # UncertaintySpec fields
+    # two-thickness mode (second sample of the same material, same frequency grid)
+    two_thickness: bool = False
+    thickness2_mm: float | None = None
+    offset1_2_mm: float = 0.0
+    offset2_2_mm: float = 0.0
 
     def validate(self) -> list[str]:
         errs = []
@@ -112,6 +124,11 @@ class AnalysisConfig:
             errs.append("Holder length must be at least the sample thickness.")
         if not (self.noise_sigma > 0):
             errs.append("Noise level must be positive.")
+        if self.two_thickness:
+            if not (self.thickness2_mm is not None and np.isfinite(self.thickness2_mm) and self.thickness2_mm > 0):
+                errs.append("Two-thickness mode needs a positive thickness for sample 2 (mm).")
+            elif abs(self.thickness2_mm - self.thickness_mm) <= 1e-6 * max(self.thickness_mm, 1e-9):
+                errs.append("The two samples must have different thicknesses.")
         return errs
 
     def key(self, data_hash: str) -> str:
@@ -130,6 +147,14 @@ def data_hash(data: TwoPortData) -> str:
         h.update(np.ascontiguousarray(a).tobytes())
     h.update(",".join(data.measured).encode())
     return h.hexdigest()[:16]
+
+
+def combined_hash(data: TwoPortData, data2: TwoPortData | None, cfg: "AnalysisConfig") -> str:
+    """Cache key component covering every dataset the configuration actually uses."""
+    h = data_hash(data)
+    if cfg.two_thickness and data2 is not None:
+        h = hashlib.sha256((h + data_hash(data2)).encode()).hexdigest()[:16]
+    return h
 
 
 def window(data: TwoPortData, cfg: AnalysisConfig):
@@ -159,8 +184,29 @@ class Outcome:
     data_summary: dict = field(default_factory=dict)
 
 
-def run_analysis(data: TwoPortData, cfg: AnalysisConfig, progress=None, data_summary=None) -> Outcome:
-    """Run the core extraction for ``cfg`` on ``data`` (raises ValueError on invalid settings)."""
+def grids_compatible(f1, f2, rtol=1e-9) -> str | None:
+    """None if two frequency grids are identical, otherwise a human-readable reason.
+
+    Measured S-parameters are never interpolated onto another grid: both samples must be
+    measured with the same VNA sweep (or restricted to a common window of identical points).
+    """
+    f1, f2 = np.asarray(f1, float), np.asarray(f2, float)
+    if f1.shape != f2.shape:
+        return (f"the samples have different numbers of frequency points in the analysed window ({f1.size} vs "
+                f"{f2.size})")
+    if not np.allclose(f1, f2, rtol=rtol, atol=0):
+        k = int(np.argmax(np.abs(f1 - f2)))
+        return f"the frequency grids differ (e.g. {f1[k]/1e9:.9g} vs {f2[k]/1e9:.9g} GHz at point {k})"
+    return None
+
+
+def run_analysis(data: TwoPortData, cfg: AnalysisConfig, progress=None, data_summary=None,
+                 data2: TwoPortData | None = None) -> Outcome:
+    """Run the core extraction for ``cfg`` (raises ValueError on invalid settings).
+
+    With ``cfg.two_thickness`` the second sample ``data2`` is required and the joint solver
+    ``nrw.extract_multi_thickness`` is used; ``cfg.method`` is then not used.
+    """
     errs = cfg.validate()
     if errs:
         raise ValueError(" ".join(errs))
@@ -171,18 +217,55 @@ def run_analysis(data: TwoPortData, cfg: AnalysisConfig, progress=None, data_sum
     if cfg.uncertainty:
         unc = UncertaintySpec(**cfg.uncertainty)
     t0 = time.perf_counter()
-    res = extract_material_parameters(
-        frequency=f, s11=s11, s21=s21, s12=s12, s22=s22, thickness=cfg.thickness_mm * 1e-3,
-        geometry=cfg.geometry_arg(), method=cfg.method, branch_method=cfg.branch_method,
-        reference_plane_offsets=(cfg.offset1_mm * 1e-3, cfg.offset2_mm * 1e-3),
-        holder_length=None if cfg.holder_length_mm is None else cfg.holder_length_mm * 1e-3,
-        assume_nonmagnetic=cfg.assume_nonmagnetic, noise_sigma=cfg.noise_sigma, average_ports=cfg.average_ports,
-        regularization=cfg.regularization, prior_eps_mu=cfg.prior_eps_mu, uncertainty=unc, kk=cfg.kk,
-        uncertainty_progress=progress)
+    if cfg.two_thickness:
+        if data2 is None:
+            raise ValueError("Two-thickness mode is selected but no second sample is loaded.")
+        f2, t11, t21, t12, t22 = window(data2, cfg)
+        why = grids_compatible(f, f2)
+        if why:
+            raise ValueError(f"Two-thickness mode needs both samples on the same frequency grid: {why}. Measured "
+                             "data are not interpolated; re-measure with the same sweep or choose a window where "
+                             "the points coincide.")
+        meas = [dict(s11=s11, s21=s21, s12=s12, s22=s22, thickness=cfg.thickness_mm * 1e-3,
+                     reference_plane_offsets=(cfg.offset1_mm * 1e-3, cfg.offset2_mm * 1e-3)),
+                dict(s11=t11, s21=t21, s12=t12, s22=t22, thickness=cfg.thickness2_mm * 1e-3,
+                     reference_plane_offsets=(cfg.offset1_2_mm * 1e-3, cfg.offset2_2_mm * 1e-3))]
+        try:
+            res = extract_multi_thickness(f, meas, geometry=cfg.geometry_arg(), branch_method=cfg.branch_method,
+                                          noise_sigma=cfg.noise_sigma, kk=cfg.kk, uncertainty=unc,
+                                          uncertainty_progress=progress, prior_eps_mu=cfg.prior_eps_mu)
+        except ValueError as e:  # InputError is a ValueError
+            raise ValueError(str(e)) from e
+        source = f"{data.source} + {data2.source}"
+    else:
+        res = extract_material_parameters(
+            frequency=f, s11=s11, s21=s21, s12=s12, s22=s22, thickness=cfg.thickness_mm * 1e-3,
+            geometry=cfg.geometry_arg(), method=cfg.method, branch_method=cfg.branch_method,
+            reference_plane_offsets=(cfg.offset1_mm * 1e-3, cfg.offset2_mm * 1e-3),
+            holder_length=None if cfg.holder_length_mm is None else cfg.holder_length_mm * 1e-3,
+            assume_nonmagnetic=cfg.assume_nonmagnetic, noise_sigma=cfg.noise_sigma,
+            average_ports=cfg.average_ports, regularization=cfg.regularization, prior_eps_mu=cfg.prior_eps_mu,
+            uncertainty=unc, kk=cfg.kk, uncertainty_progress=progress)
+        source = data.source
     dt = time.perf_counter() - t0
     a = assess(res)
     return Outcome(cfg, res, a, results_table(res, a), diagnostics_table(res), dt,
-                   datetime.now(timezone.utc).isoformat(timespec="seconds"), data.source, data_summary or {})
+                   datetime.now(timezone.utc).isoformat(timespec="seconds"), source, data_summary or {})
+
+
+def single_sample_outcomes(outcome: "Outcome") -> dict:
+    """Wrap the single-sample solutions of a two-thickness outcome (no recomputation)."""
+    res = outcome.result
+    out = {}
+    if not res.sample_results:
+        return out
+    Ls = res.metadata.get("thicknesses_m", [])
+    for i, r in enumerate(res.sample_results):
+        a = assess(r)
+        label = f"sample {i + 1} alone (L = {Ls[i] * 1e3:g} mm)" if i < len(Ls) else f"sample {i + 1} alone"
+        out[label] = Outcome(outcome.config, r, a, results_table(r, a), diagnostics_table(r), 0.0,
+                             outcome.timestamp_utc, outcome.source, outcome.data_summary)
+    return out
 
 
 def _kk_metric(res: ExtractionResult, q: str):
@@ -248,6 +331,11 @@ def results_table(res: ExtractionResult, a: Assessment) -> pd.DataFrame:
             tab[f"{q}_p97.5"] = u["p97.5"]
             tab[f"{q}_sigma"] = u["sigma_percentile"]
         tab["mc_branch_change_fraction"] = res.uncertainty.get("branch_change_fraction", nan)
+    if res.sample_results:
+        for i, r in enumerate(res.sample_results):
+            tab[f"branch_index_sample{i + 1}"] = r.selected_branch
+            tab[f"ill_conditioned_sample{i + 1}_alone"] = np.asarray(r.flags.get("singular_region",
+                                                                               np.zeros(len(f), bool)), bool)
     tab["method"] = res.method
     tab["status"] = a.point_status
     tab["warnings"] = a.point_reasons
@@ -290,11 +378,12 @@ def diagnostics_table(res: ExtractionResult) -> pd.DataFrame:
 
 
 def compare_methods(data: TwoPortData, cfg: AnalysisConfig, methods=None) -> dict:
-    """Run several core methods on the same data/configuration (no KK, no Monte Carlo)."""
+    """Run several single-sample core methods on ``data`` with the same settings (no KK, no
+    Monte Carlo). In two-thickness mode this compares methods on sample 1 only."""
     methods = methods or ["nrw", "iterative_eps_mu", "baker_jarvis", "nrw_eps"]
     out = {}
     for m in methods:
-        c = AnalysisConfig(**{**asdict(cfg), "method": m, "kk": False, "uncertainty": None})
+        c = AnalysisConfig(**{**asdict(cfg), "method": m, "kk": False, "uncertainty": None, "two_thickness": False})
         try:
             out[m] = run_analysis(data, c)
         except ValueError as e:

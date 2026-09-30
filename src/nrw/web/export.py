@@ -14,7 +14,7 @@ from dataclasses import asdict
 
 
 from ..io import _jsonable
-from .analysis import BRANCH_METHODS, METHODS
+from .analysis import BRANCH_METHODS, JOINT_LABEL, JOINT_METHOD, METHODS
 from .version import software_id
 
 CONVENTION = ("exp(+jωt) time dependence; εr = ε′ − jε″ and μr = μ′ − jμ″, so a passive medium has "
@@ -44,7 +44,9 @@ def metadata(outcome) -> dict:
         "convention": CONVENTION,
         "configuration": asdict(cfg),
         "method_used": res.method,
-        "method_label": METHODS.get(cfg.method, (cfg.method,))[0],
+        "method_label": JOINT_LABEL[0] if res.method == JOINT_METHOD else METHODS.get(cfg.method, (cfg.method,))[0],
+        "two_thickness": bool(cfg.two_thickness),
+        "thicknesses_m": res.metadata.get("thicknesses_m", [res.metadata.get("thickness_m")]),
         "branch_method": res.branch_method,
         "branch_method_label": BRANCH_METHODS.get(res.branch_method, (res.branch_method,))[0],
         "frequency_interval_hz": [float(f[0]), float(f[-1])],
@@ -97,13 +99,16 @@ def report_html(outcome, figures: dict) -> bytes:
     info = [
         ("Source file", md["source_file"]), ("Analysis time (UTC)", md["analysis_timestamp_utc"]),
         ("Software", f"nrw {sw['package_version']}, commit {sw['commit']}" + (" (uncommitted changes)" if sw["dirty"] else "")),
-        ("Sample thickness", f"{cfg['thickness_mm']:g} mm"),
+        ("Sample thickness", f"{cfg['thickness_mm']:g} mm" if not cfg["two_thickness"] else
+         f"sample 1: {cfg['thickness_mm']:g} mm, sample 2: {cfg['thickness2_mm']:g} mm (two-thickness joint solution)"),
         ("Geometry", "coaxial line (TEM)" if cfg["geometry"] == "coax" else f"rectangular waveguide TE10, a = {cfg['waveguide_a_mm']:g} mm"),
         ("Method", f"{md['method_label']} → {md['method_used']}"),
         ("Branch method", md["branch_method_label"]),
         ("Frequency interval", f"{md['frequency_interval_hz'][0]/1e9:.6g}–{md['frequency_interval_hz'][1]/1e9:.6g} GHz "
                                f"({md['n_frequencies']} points)"),
-        ("Reference-plane offsets", f"port 1: {cfg['offset1_mm']:g} mm, port 2: {cfg['offset2_mm']:g} mm"),
+        ("Reference-plane offsets", f"port 1: {cfg['offset1_mm']:g} mm, port 2: {cfg['offset2_mm']:g} mm"
+         + (f"; sample 2: port 1: {cfg['offset1_2_mm']:g} mm, port 2: {cfg['offset2_2_mm']:g} mm"
+            if cfg["two_thickness"] else "")),
         ("Assumed S-parameter noise σ", f"{cfg['noise_sigma']:g}"),
         ("Uncertainty", "Monte Carlo: " + json.dumps(md["uncertainty"]["spec"]) if md["uncertainty"] else "not estimated"),
     ]
@@ -142,7 +147,9 @@ such as a wrong thickness, air gaps or calibration errors are not detectable by 
 
 
 def zip_bundle(outcome, figures: dict, input_name: str | None = None, input_bytes: bytes | None = None,
-               comparison: dict | None = None) -> bytes:
+               comparison: dict | None = None, extra_inputs: dict | None = None) -> bytes:
+    """ZIP with results, report, figures, optional comparison tables and input file(s).
+    ``extra_inputs``: {filename: bytes} (e.g. the second sample in two-thickness mode)."""
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
         z.writestr("extracted_parameters.csv", results_csv(outcome))
@@ -158,6 +165,8 @@ def zip_bundle(outcome, figures: dict, input_name: str | None = None, input_byte
                     z.writestr(f"comparison/{name}.csv", o.table.to_csv(index=False, float_format="%.10g"))
         if input_name and input_bytes is not None:
             z.writestr(f"input/{input_name}", input_bytes)
+        for name, blob in (extra_inputs or {}).items():
+            z.writestr(f"input/{name}", blob)
         z.writestr("README.txt", "NRW analysis export\n\n" + CONVENTION + "\n\n" + KK_DISCLAIMER + "\n\n"
                    "extracted_parameters.csv  per-frequency results and status\n"
                    "diagnostics.csv           Gamma, T, gamma, z, branch, Cramer-Rao bounds, solver data, flags\n"

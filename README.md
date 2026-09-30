@@ -21,7 +21,8 @@ data are included (see `data/raw/README.md`).
 A password-protected browser application (Streamlit) for real measured data:
 upload `.s2p`/CSV, validate, configure, extract ε<sub>r</sub>/μ<sub>r</sub>, inspect
 branch/numerical/passivity/causality diagnostics, compare methods, run Monte Carlo
-uncertainty, and export CSV/JSON/PNG/HTML/ZIP. It calls the tested core. Full documentation:
+uncertainty, run the two-thickness joint solution when a second sample is available, and export
+CSV/JSON/PNG/HTML/ZIP. It calls the tested core. Full documentation:
 **`docs/web_app.md`**.
 
 ```bash
