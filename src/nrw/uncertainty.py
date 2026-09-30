@@ -54,8 +54,11 @@ def _perturb_pair(s_refl, s_trans, spec, rng):
 
 
 def monte_carlo(extract_fn, f, s11, s21, s12, s22, thickness_m, geom, spec: UncertaintySpec,
-                nominal_branch=None):
+                nominal_branch=None, progress=None):
     """Run ``extract_fn(f, s11, s21, s12, s22, thickness_m) -> (eps, mu, branch)`` on perturbed data.
+
+    ``progress``: optional callable ``progress(done, total)`` invoked after every draw
+    (used by the web UI to show a progress bar). It does not affect the random stream.
 
     Returns a dict of per-frequency summaries for eps', eps'', mu', mu''.
     """
@@ -77,8 +80,10 @@ def monte_carlo(extract_fn, f, s11, s21, s12, s22, thickness_m, geom, spec: Unce
             e, m, b = extract_fn(f, a11, a21, a12, a22, L)
         except Exception:  # noqa: BLE001 - a failed draw is counted, not hidden
             failures += 1
-            continue
-        E[i], M[i], B[i] = e, m, b
+        else:
+            E[i], M[i], B[i] = e, m, b
+        if progress is not None:
+            progress(i + 1, spec.n_draws)
     out = {"n_draws": spec.n_draws, "n_failed_draws": failures, "spec": spec.to_dict()}
     for name, arr in (("eps_real", E.real), ("eps_loss", -E.imag), ("mu_real", M.real), ("mu_loss", -M.imag)):
         with np.errstate(invalid="ignore"):

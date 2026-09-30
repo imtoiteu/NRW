@@ -42,13 +42,16 @@ def build_parser():
     p.add_argument("--seed", type=int, default=12345)
     p.add_argument("--no-plots", action="store_true")
     p.add_argument("--touchstone-backend", default="builtin", choices=["builtin", "skrf"])
+    p.add_argument("--csv-freq-unit", default=None, choices=["Hz", "kHz", "MHz", "GHz"],
+                   help="frequency unit of a CSV whose header has none")
     p.add_argument("--output", required=True, help="output directory")
     return p
 
 
 def main(argv=None):
     args = build_parser().parse_args(argv)
-    data = read_measurement(args.input, backend=args.touchstone_backend)
+    data = read_measurement(args.input, backend=args.touchstone_backend,
+                            freq_unit=None if args.csv_freq_unit is None else args.csv_freq_unit.lower())
     f = data.frequency
     sel = slice(None)
     if args.fmin_ghz is not None or args.fmax_ghz is not None:
@@ -70,7 +73,9 @@ def main(argv=None):
                               thickness_m=args.thickness_std_um * 1e-6, ref_plane_m=args.ref_plane_std_um * 1e-6,
                               n_draws=args.mc_draws, seed=args.seed)
     res = extract_material_parameters(
-        frequency=f[sel], s11=data.s11[sel], s21=data.s21[sel], s12=data.s12[sel], s22=data.s22[sel],
+        frequency=f[sel], s11=data.s11[sel], s21=data.s21[sel],
+        s12=None if data.s12_measured() is None else data.s12[sel],
+        s22=None if data.s22_measured() is None else data.s22[sel],
         thickness=args.thickness_mm * 1e-3, geometry=geometry, method=args.method.replace("-", "_"),
         branch_method=args.branch_method.replace("-", "_"),
         reference_plane_offsets=(args.offset1_mm * 1e-3, args.offset2_mm * 1e-3),
@@ -79,7 +84,15 @@ def main(argv=None):
     res.metadata["input_file"] = str(args.input)
     res.metadata["touchstone_z0_ohm"] = data.z0
     out = res.save(args.output, plots=not args.no_plots)
-    print(f"wrote {out}/results.csv, summary.json" + ("" if args.no_plots else " and figures"))
+    from .assessment import assess
+    from .io import dump_json
+
+    a = assess(res)
+    dump_json(a.to_dict(), out / "assessment.json")
+    print(f"wrote {out}/results.csv, summary.json, assessment.json" + ("" if args.no_plots else " and figures"))
+    print(f"STATUS: {a.level} (rules in src/nrw/assessment.py; a summary of diagnostics, not an accuracy estimate)")
+    for r in a.reasons:
+        print(f"  {r['severity']} {r['rule']}: {r['message']}")
     for w in res.warnings:
         print(f"WARNING: {w}")
     for q, r in res.causality.items():

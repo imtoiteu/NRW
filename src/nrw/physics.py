@@ -77,13 +77,19 @@ def check_network(s11, s21, s12=None, s22=None, tol=1e-3, noise_sigma=None, k_si
     absorbed = 1 - np.abs(s11) ** 2 - np.abs(s21) ** 2
     recip = np.abs(s21 - s12) / np.maximum(np.abs(s21), 1e-12)
     sym = np.abs(s11 - s22) / np.maximum(np.abs(s11), np.abs(s22)).clip(1e-12)
+    # with a known noise level, a difference is only significant if it also exceeds the noise
+    # of the difference of two measurements (sqrt(2) sigma) by k_sigma
+    dn = k_sigma * np.sqrt(2) * noise_sigma if noise_sigma is not None else 0.0
+    recip_sig = np.abs(s21 - s12) > dn
+    sym_sig = np.abs(s11 - s22) > dn
     return [
         Check("network_passivity", "exact", f"largest singular value of S <= 1 + {tol:.2g}", smax > 1 + tol, smax),
         Check("absorbed_power_port1", "exact", "1 - |S11|^2 - |S21|^2 >= -tol", absorbed < -tol, absorbed),
-        Check("reciprocity", "assumption", "|S21 - S12|/|S21| <= 5 % (linear, non-gyrotropic sample; stable VNA)",
-              recip > 0.05, recip),
+        Check("reciprocity", "assumption", "|S21 - S12|/|S21| <= 5 % or within noise (linear, non-gyrotropic "
+              "sample; stable VNA)", (recip > 0.05) & recip_sig, recip),
         Check("port_symmetry", "assumption",
-              "|S11 - S22|/max|S11|,|S22| <= 20 % (homogeneous sample, symmetric planes)", sym > 0.2, sym),
+              "|S11 - S22|/max|S11|,|S22| <= 20 % or within noise (homogeneous sample, symmetric planes)",
+              (sym > 0.2) & sym_sig, sym),
     ]
 
 

@@ -243,7 +243,8 @@ def extract_material_parameters(frequency, s11, s21, thickness, s12=None, s22=No
                                 holder_length=None, assume_nonmagnetic=False, noise_sigma=1e-3,
                                 noise_floor=None, average_ports=True, multistart=True, bj_formulation="eq2.24+2.25", bj_beta=0.0,
                                 regularization=1e-2, prior_eps_mu=None, uncertainty=None, kk=True,
-                                kk_threshold=None, singular_rel_threshold=0.01) -> ExtractionResult:
+                                kk_threshold=None, singular_rel_threshold=0.01,
+                                uncertainty_progress=None) -> ExtractionResult:
     """Extract complex eps_r and mu_r from two-port T/R S-parameters.
 
     Parameters
@@ -266,6 +267,7 @@ def extract_material_parameters(frequency, s11, s21, thickness, s12=None, s22=No
         default: reference-plane invariant; "eq2.25", "eq2.38" with weight beta, "direct").
         The default was chosen from results/studies/bj_formulation.csv (docs/benchmark_report.md).
     uncertainty : None, True (default spec) or nrw.uncertainty.UncertaintySpec.
+    uncertainty_progress : optional callable(done, total) called after each Monte Carlo draw.
     singular_rel_threshold : a frequency is flagged ``singular_region`` (ill-conditioned) when the
         Cramer-Rao std of eps' at ``noise_sigma`` exceeds this fraction of eps' (default 1 %,
         about 10x the level of well-conditioned points in the benchmark cases).
@@ -351,7 +353,7 @@ def extract_material_parameters(frequency, s11, s21, thickness, s12=None, s22=No
             return c["eps"], c["mu"], c["branch"].m
 
         unc = monte_carlo(run, f, s11, s21, s12 if s12 is not None else s21, s22 if s22 is not None else s11,
-                          L, geom, spec, nominal_branch=br.m)
+                          L, geom, spec, nominal_branch=br.m, progress=uncertainty_progress)
         flags["mc_branch_unstable"] = unc["branch_change_fraction"] > 0.05
 
     eps_sig = unc["eps_loss"]["sigma_percentile"] if unc else None
