@@ -16,6 +16,45 @@ instead of silently returning questionable numbers.
 **All results in this repository come from synthetic ground-truth data.** No measured
 data are included (see `data/raw/README.md`).
 
+## Web Application
+
+A password-protected browser application (Streamlit) for real measured data:
+upload `.s2p`/CSV, validate, configure, extract ε<sub>r</sub>/μ<sub>r</sub>, inspect
+branch/numerical/passivity/causality diagnostics, compare methods, run Monte Carlo
+uncertainty, and export CSV/JSON/PNG/HTML/ZIP. It calls the tested core. Full documentation:
+**`docs/web_app.md`**.
+
+```bash
+# 1. install (once)
+cd /root/imtoiteu/NRW
+uv venv .venv -p 3.12 && uv pip install -p .venv/bin/python -e ".[web]"
+
+# 2. password: environment variable only, never in Git
+mkdir -p ~/.config/nrw && chmod 700 ~/.config/nrw
+python3 -c "import secrets; print(secrets.token_urlsafe(18))" > ~/.config/nrw/app_password
+chmod 600 ~/.config/nrw/app_password
+export NRW_APP_PASSWORD="$(cat ~/.config/nrw/app_password)"
+
+# 3. start (foreground; Ctrl+C stops)
+export NRW_APP_PORT=8501            # optional
+./scripts/run_web.sh                # = streamlit run app.py --server.address 0.0.0.0 --server.port 8501
+
+# 3b. or run persistently in tmux
+tmux new-session -d -s nrw-web \
+  'export NRW_APP_PASSWORD="$(cat ~/.config/nrw/app_password)"; cd /root/imtoiteu/NRW && ./scripts/run_web.sh'
+tmux attach -t nrw-web              # view the log (detach: Ctrl+b, d)
+tmux kill-session -t nrw-web        # stop
+
+# 4. find the VPS address and open http://<VPS_IP>:8501 in a browser
+curl -s https://api.ipify.org; echo
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8501/_stcore/health   # 200 = running
+```
+
+If UFW is active (`ufw status`), allow the port with `ufw allow 8501/tcp`. The app uses plain
+HTTP; for regular use prefer an SSH tunnel (`ssh -L 8501:localhost:8501 root@<VPS_IP>`) or a
+TLS reverse proxy (see `docs/web_app.md` §4). An optional REST endpoint
+(`POST /api/v1/extract`) is started with `./scripts/run_api.sh`.
+
 ## Main findings (details: `docs/benchmark_report.md`)
 
 * The NRW divergence near βL = kπ is an **identifiability limit of single-sample
@@ -131,7 +170,8 @@ minutes; the full external comparison takes about an hour because of the Octave-
 
 | path | content |
 |---|---|
-| `src/nrw/` | package: `geometry`, `materials`, `forward` (independent ABCD model), `model`, `classical` (NRW), `branch`, `iterative` (NIST ε-only, (ε, μ) LSQ, regularised, multi-thickness), `conditioning` (CRLB), `physics`, `kk`, `uncertainty`, `io`, `api`, `cli`, `plotting` |
+| `app.py`, `src/nrw/web/` | web application (UI, exports, security, optional REST API) |
+| `src/nrw/` | package: `geometry`, `materials`, `forward` (independent ABCD model), `model`, `classical` (NRW), `branch`, `iterative` (NIST ε-only, (ε, μ) LSQ, regularised, multi-thickness), `conditioning` (CRLB), `physics`, `kk`, `uncertainty`, `assessment` (GREEN/YELLOW/RED rules), `io`, `api`, `cli`, `plotting` |
 | `tests/` | pytest suite |
 | `scripts/` | benchmark harness and studies |
 | `examples/` | synthetic data generator |

@@ -1,0 +1,19 @@
+# Server configuration for the NRW web application (no secrets in this file).
+[server]
+headless = true
+maxUploadSize = 50            # MB; S-parameter files are small
+enableStaticServing = false   # nothing from the server file system is web-served
+fileWatcherType = "none"      # production: do not reload on file changes
+enableXsrfProtection = true
+enableCORS = true
+
+[browser]
+gatherUsageStats = false
+
+[client]
+toolbarMode = "minimal"
+showErrorDetails = false      # do not show tracebacks to remote users
+
+[theme]
+base = "light"
+primaryColor = "#2a78d6"

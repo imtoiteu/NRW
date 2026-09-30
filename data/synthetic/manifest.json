@@ -1,0 +1,42 @@
+{
+  "synthetic_magnetic_composite_2mm.s2p": {
+    "thickness_mm": 2.0,
+    "geometry": "coax",
+    "description": "Magnetodielectric composite (Debye eps, Lorentz mu), 2 mm: well-conditioned reference case",
+    "eps_model": "Debye(eps_inf=6.0, delta=4.0, f_relax=5000000000.0, sigma_dc=0.0)",
+    "mu_model": "Lorentz(eps_inf=1.0, delta=2.5, f0=4000000000.0, gamma_f=6000000000.0)",
+    "synthetic": true
+  },
+  "synthetic_magnetic_composite_2mm.csv": {
+    "thickness_mm": 2.0,
+    "geometry": "coax",
+    "description": "Magnetodielectric composite (Debye eps, Lorentz mu), 2 mm: well-conditioned reference case (CSV, dB/phase format)",
+    "eps_model": "Debye(eps_inf=6.0, delta=4.0, f_relax=5000000000.0, sigma_dc=0.0)",
+    "mu_model": "Lorentz(eps_inf=1.0, delta=2.5, f0=4000000000.0, gamma_f=6000000000.0)",
+    "synthetic": true
+  },
+  "synthetic_lowloss_dielectric_10mm.s2p": {
+    "thickness_mm": 10.0,
+    "geometry": "coax",
+    "description": "Low-loss dielectric, 10 mm, mu = 1: crosses half-wavelength points (use the NIST mu = 1 method)",
+    "eps_model": "Debye(eps_inf=4.0, delta=0.2, f_relax=30000000000.0, sigma_dc=0.0)",
+    "mu_model": "1.0",
+    "synthetic": true
+  },
+  "synthetic_thick_dielectric_30mm_branchwrap.s2p": {
+    "thickness_mm": 30.0,
+    "geometry": "coax",
+    "description": "Thick dielectric, 30 mm: beta L > pi already at 2 GHz, several phase wraps (branch m up to 6)",
+    "eps_model": "Debye(eps_inf=10.0, delta=0.5, f_relax=30000000000.0, sigma_dc=0.0)",
+    "mu_model": "1.0",
+    "synthetic": true
+  },
+  "synthetic_lowloss_magnetic_20mm_halfwave.s2p": {
+    "thickness_mm": 20.0,
+    "geometry": "coax",
+    "description": "Low-loss magnetic sample, 20 mm: simultaneous eps/mu ill-conditioned near beta L = k pi",
+    "eps_model": "(4-0.004j)",
+    "mu_model": "(1.5-0.003j)",
+    "synthetic": true
+  }
+}
